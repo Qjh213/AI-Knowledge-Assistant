@@ -22,10 +22,12 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     chat_model: str = "deepseek-v4-flash"
-    embedding_provider: str = "huggingface"
+    embedding_provider: str = "siliconflow"
     embedding_model: str = "BAAI/bge-m3"
-    embedding_device: str = "cpu"
     embedding_dimension: int = 1024
+
+    siliconflow_api_key: str = ""
+    siliconflow_base_url: str = "https://api.siliconflow.cn/v1"
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -13,5 +13,3 @@ psycopg2-binary
 
 pymilvus
 
-langchain-huggingface
-sentence-transformers
