@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+venv/
+venv.old/
+.venv/
+
+# Environment variables
+.env
+backend/.env
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Runtime data
+data/documents/*
+!data/documents/.gitkeep
+vectorstore/*
+!vectorstore/.gitkeep
+
+# Logs
+*.log
