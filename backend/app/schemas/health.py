@@ -9,3 +9,14 @@ class HealthResponse(BaseModel):
     version: str
     environment: str
     timestamp: datetime
+
+
+class ServiceStatus(BaseModel):
+    status: str
+    detail: str
+
+
+class ReadinessResponse(BaseModel):
+    status: str
+    services: dict[str, ServiceStatus]
+    timestamp: datetime
