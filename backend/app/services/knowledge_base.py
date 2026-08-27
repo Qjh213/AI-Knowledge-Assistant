@@ -14,6 +14,9 @@ from app.schemas.knowledge_base import (
     KnowledgeBaseUpdate,
 )
 
+from app.services.document_storage import DocumentStorageService
+from app.services.vector_store import VectorStoreService
+
 
 class KnowledgeBaseService:
     @staticmethod
@@ -118,15 +121,27 @@ class KnowledgeBaseService:
 
     @staticmethod
     def delete(
-        session: Session,
-        knowledge_base_id: UUID,
+            session: Session,
+            knowledge_base_id: UUID,
     ) -> None:
         knowledge_base = KnowledgeBaseService.get(
             session,
             knowledge_base_id,
         )
 
+        file_paths = [
+            document.file_path
+            for document in knowledge_base.documents
+        ]
+
+        vector_store = VectorStoreService()
+        storage_service = DocumentStorageService()
+
         try:
+            vector_store.delete_knowledge_base(
+                knowledge_base_id
+            )
+
             KnowledgeBaseRepository.delete(
                 session,
                 knowledge_base,
@@ -136,3 +151,6 @@ class KnowledgeBaseService:
         except Exception:
             session.rollback()
             raise
+
+        for file_path in file_paths:
+            storage_service.delete(file_path)

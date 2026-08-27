@@ -5,6 +5,7 @@ python-dotenv
 langchain
 langchain-community
 langchain-openai
+langchain-text-splitters
 
 pydantic
 pydantic-settings
@@ -14,3 +15,8 @@ psycopg2-binary
 
 pymilvus
 
+python-multipart
+pypdf
+python-docx
+
+openai
