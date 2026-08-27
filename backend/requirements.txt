@@ -5,6 +5,7 @@ python-dotenv
 langchain
 langchain-community
 langchain-openai
+langchain-text-splitters
 
 pydantic
 pydantic-settings

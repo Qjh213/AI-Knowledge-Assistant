@@ -29,6 +29,9 @@ class Settings(BaseSettings):
         ".docx",
     )
 
+    chunk_size: int = 1000
+    chunk_overlap: int = 150
+
     @property
     def max_upload_size_bytes(self) -> int:
         return self.max_upload_size_mb * 1024 * 1024
