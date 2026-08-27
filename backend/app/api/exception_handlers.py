@@ -2,8 +2,13 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from app.core.exceptions import (
+    DocumentAlreadyExistsError,
+    DocumentNotFoundError,
+    DocumentTooLargeError,
+    EmptyDocumentError,
     KnowledgeBaseAlreadyExistsError,
     KnowledgeBaseNotFoundError,
+    UnsupportedDocumentTypeError,
 )
 
 
@@ -32,6 +37,70 @@ async def knowledge_base_already_exists_handler(
         },
     )
 
+async def document_not_found_handler(
+    request: Request,
+    exc: DocumentNotFoundError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "detail": str(exc),
+            "code": "document_not_found",
+        },
+    )
+
+
+async def document_already_exists_handler(
+    request: Request,
+    exc: DocumentAlreadyExistsError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "detail": str(exc),
+            "code": "document_already_exists",
+        },
+    )
+
+
+async def unsupported_document_type_handler(
+    request: Request,
+    exc: UnsupportedDocumentTypeError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+        content={
+            "detail": str(exc),
+            "code": "unsupported_document_type",
+        },
+    )
+
+
+async def document_too_large_handler(
+    request: Request,
+    exc: DocumentTooLargeError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+        content={
+            "detail": str(exc),
+            "code": "document_too_large",
+        },
+    )
+
+
+async def empty_document_handler(
+    request: Request,
+    exc: EmptyDocumentError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={
+            "detail": str(exc),
+            "code": "empty_document",
+        },
+    )
+
 
 def register_exception_handlers(application: FastAPI) -> None:
     application.add_exception_handler(
@@ -41,4 +110,24 @@ def register_exception_handlers(application: FastAPI) -> None:
     application.add_exception_handler(
         KnowledgeBaseAlreadyExistsError,
         knowledge_base_already_exists_handler,
+    )
+    application.add_exception_handler(
+        DocumentNotFoundError,
+        document_not_found_handler,
+    )
+    application.add_exception_handler(
+        DocumentAlreadyExistsError,
+        document_already_exists_handler,
+    )
+    application.add_exception_handler(
+        UnsupportedDocumentTypeError,
+        unsupported_document_type_handler,
+    )
+    application.add_exception_handler(
+        DocumentTooLargeError,
+        document_too_large_handler,
+    )
+    application.add_exception_handler(
+        EmptyDocumentError,
+        empty_document_handler,
     )

@@ -1,6 +1,10 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
@@ -15,6 +19,19 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+psycopg2://postgres:postgres@localhost:5432/knowledge"
     )
+
+    document_storage_path: Path = PROJECT_ROOT / "data" / "documents"
+    max_upload_size_mb: int = 20
+    allowed_document_extensions: tuple[str, ...] = (
+        ".txt",
+        ".md",
+        ".pdf",
+        ".docx",
+    )
+
+    @property
+    def max_upload_size_bytes(self) -> int:
+        return self.max_upload_size_mb * 1024 * 1024
 
     milvus_uri: str = "http://localhost:19530"
     milvus_token: str = ""
