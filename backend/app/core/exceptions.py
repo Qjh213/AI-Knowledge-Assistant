@@ -64,3 +64,24 @@ class DocumentAlreadyExistsError(Exception):
             f"A document with the same content already exists in "
             f"knowledge base '{knowledge_base_id}'"
         )
+
+
+class DocumentParseError(Exception):
+    def __init__(
+        self,
+        filename: str,
+        detail: str,
+    ) -> None:
+        self.filename = filename
+        self.detail = detail
+        super().__init__(
+            f"Failed to parse document '{filename}': {detail}"
+        )
+
+
+class NoExtractableTextError(DocumentParseError):
+    def __init__(self, filename: str) -> None:
+        super().__init__(
+            filename,
+            "no extractable text was found",
+        )
