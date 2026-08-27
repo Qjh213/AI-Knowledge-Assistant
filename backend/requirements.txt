@@ -18,3 +18,5 @@ pymilvus
 python-multipart
 pypdf
 python-docx
+
+openai

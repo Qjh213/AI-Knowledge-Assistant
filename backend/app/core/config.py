@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     embedding_provider: str = "siliconflow"
     embedding_model: str = "BAAI/bge-m3"
     embedding_dimension: int = 1024
+    embedding_batch_size: int = 32
 
     siliconflow_api_key: str = ""
     siliconflow_base_url: str = "https://api.siliconflow.cn/v1"

@@ -91,3 +91,9 @@ class DocumentChunkingError(Exception):
     def __init__(self, detail: str) -> None:
         self.detail = detail
         super().__init__(f"Failed to chunk document: {detail}")
+
+
+class EmbeddingServiceError(Exception):
+    def __init__(self, detail: str) -> None:
+        self.detail = detail
+        super().__init__(f"Embedding generation failed: {detail}")
