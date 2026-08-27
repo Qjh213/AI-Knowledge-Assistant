@@ -2,18 +2,17 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.schemas.retrieval import (
-    RetrievalRequest,
-    RetrievalResponse,
-    RetrievalResult,
-)
-
 from app.core.exceptions import (
     EmbeddingServiceError,
     RetrievalServiceError,
     VectorStoreError,
 )
-
+from app.repositories.document import DocumentRepository
+from app.schemas.retrieval import (
+    RetrievalRequest,
+    RetrievalResponse,
+    RetrievalResult,
+)
 from app.services.embedding import EmbeddingService
 from app.services.knowledge_base import KnowledgeBaseService
 from app.services.vector_store import VectorStoreService
@@ -56,25 +55,41 @@ class RetrievalService:
             )
 
         except (
-                EmbeddingServiceError,
-                VectorStoreError,
+            EmbeddingServiceError,
+            VectorStoreError,
         ) as exc:
             raise RetrievalServiceError(str(exc)) from exc
 
-        results = [
-            RetrievalResult(
+        documents = DocumentRepository.get_many_for_knowledge_base(
+            session,
+            knowledge_base_id,
+            [match.document_id for match in matches],
+        )
+        documents_by_id = {
+            document.id: document
+            for document in documents
+        }
+
+        results: list[RetrievalResult] = []
+
+        for match in matches:
+            document = documents_by_id.get(match.document_id)
+
+            # Ignore orphaned vectors that no longer have a database document.
+            if document is None or match.score < request.min_score:
+                continue
+
+            results.append(RetrievalResult(
                 chunk_id=match.chunk_id,
                 document_id=match.document_id,
+                original_filename=document.original_filename,
                 chunk_index=match.chunk_index,
                 content=match.content,
                 page_number=match.page_number,
                 token_count=match.token_count,
                 metadata=match.metadata,
                 score=match.score,
-            )
-            for match in matches
-            if match.score >= request.min_score
-        ]
+            ))
 
         return RetrievalResponse(
             knowledge_base_id=knowledge_base_id,

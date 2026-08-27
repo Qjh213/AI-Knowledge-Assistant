@@ -39,6 +39,7 @@ class RetrievalRequest(BaseModel):
 class RetrievalResult(BaseModel):
     chunk_id: UUID
     document_id: UUID
+    original_filename: str
     chunk_index: int
     content: str
     page_number: int | None

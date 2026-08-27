@@ -33,6 +33,7 @@ class SuccessfulRetrievalService:
         result = RetrievalResult(
             chunk_id=uuid4(),
             document_id=uuid4(),
+            original_filename="guide.txt",
             chunk_index=0,
             content="向量数据库用于存储和检索向量。",
             page_number=1,
@@ -113,6 +114,7 @@ def test_retrieval_endpoint_success():
     assert payload["query"] == "什么是向量数据库？"
     assert payload["total"] == 1
     assert len(payload["results"]) == 1
+    assert payload["results"][0]["original_filename"] == "guide.txt"
     assert payload["results"][0]["score"] == pytest.approx(
         0.93
     )

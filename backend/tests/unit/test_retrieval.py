@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -7,6 +8,7 @@ from app.core.exceptions import (
     KnowledgeBaseNotFoundError,
     RetrievalServiceError,
 )
+from app.repositories.document import DocumentRepository
 from app.schemas.retrieval import RetrievalRequest
 from app.services.knowledge_base import KnowledgeBaseService
 from app.services.retrieval import RetrievalService
@@ -91,6 +93,17 @@ def test_retrieval_maps_and_filters_results(
             ),
         ]
     )
+    monkeypatch.setattr(
+        DocumentRepository,
+        "get_many_for_knowledge_base",
+        lambda session, target_id, document_ids: [
+            SimpleNamespace(
+                id=match.document_id,
+                original_filename="guide.txt",
+            )
+            for match in vector_store.results
+        ],
+    )
 
     service = RetrievalService(
         embedding_service=embedding_service,
@@ -127,6 +140,7 @@ def test_retrieval_maps_and_filters_results(
     assert response.query == "什么是向量数据库？"
     assert response.total == 1
     assert len(response.results) == 1
+    assert response.results[0].original_filename == "guide.txt"
     assert response.results[0].content == "高相关文本"
     assert response.results[0].score == pytest.approx(0.91)
 
@@ -185,6 +199,7 @@ def test_missing_knowledge_base_skips_embedding(
         )
 
     assert embedding_service.called is False
+
 
 def test_retrieval_wraps_embedding_failure(
     monkeypatch: pytest.MonkeyPatch,
