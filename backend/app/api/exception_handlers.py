@@ -10,6 +10,7 @@ from app.core.exceptions import (
     KnowledgeBaseAlreadyExistsError,
     KnowledgeBaseNotFoundError,
     UnsupportedDocumentTypeError,
+    RetrievalServiceError,
 )
 
 
@@ -115,6 +116,20 @@ async def document_processing_handler(
         },
     )
 
+
+async def retrieval_service_handler(
+    request: Request,
+    exc: RetrievalServiceError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "detail": str(exc),
+            "code": "retrieval_service_unavailable",
+        },
+    )
+
+
 def register_exception_handlers(application: FastAPI) -> None:
     application.add_exception_handler(
         KnowledgeBaseNotFoundError,
@@ -147,4 +162,8 @@ def register_exception_handlers(application: FastAPI) -> None:
     application.add_exception_handler(
         DocumentProcessingError,
         document_processing_handler,
+    )
+    application.add_exception_handler(
+        RetrievalServiceError,
+        retrieval_service_handler,
     )

@@ -116,3 +116,9 @@ class DocumentProcessingError(Exception):
         super().__init__(
             f"Failed to process document '{document_id}': {detail}"
         )
+
+
+class RetrievalServiceError(Exception):
+    def __init__(self, detail: str) -> None:
+        self.detail = detail
+        super().__init__(f"Retrieval failed: {detail}")
