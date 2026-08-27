@@ -171,6 +171,20 @@ def test_delete_document_uses_document_filter():
     )
 
 
+def test_delete_knowledge_base_uses_knowledge_base_filter():
+    service, client = create_service()
+    knowledge_base_id = uuid4()
+
+    deleted_count = service.delete_knowledge_base(
+        knowledge_base_id
+    )
+
+    assert deleted_count == 2
+    assert client.deleted_filter == (
+        f'knowledge_base_id == "{knowledge_base_id}"'
+    )
+
+
 def test_search_filters_by_knowledge_base():
     service, client = create_service()
     knowledge_base_id = uuid4()

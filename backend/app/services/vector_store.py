@@ -215,6 +215,26 @@ class VectorStoreService:
 
         return int(result.get("delete_count", 0))
 
+    def delete_knowledge_base(
+        self,
+        knowledge_base_id: UUID,
+    ) -> int:
+        try:
+            self.ensure_collection()
+
+            result = self.client.delete(
+                collection_name=self.collection_name,
+                filter=(
+                    f'knowledge_base_id == "{knowledge_base_id}"'
+                ),
+            )
+        except VectorStoreError:
+            raise
+        except Exception as exc:
+            raise VectorStoreError(str(exc)) from exc
+
+        return int(result.get("delete_count", 0))
+
     def search(
         self,
         knowledge_base_id: UUID,
