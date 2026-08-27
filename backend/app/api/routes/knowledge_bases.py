@@ -11,6 +11,11 @@ from app.schemas.knowledge_base import (
     KnowledgeBaseResponse,
     KnowledgeBaseUpdate,
 )
+from app.schemas.retrieval import (
+    RetrievalRequest,
+    RetrievalResponse,
+)
+from app.services.retrieval import RetrievalService
 from app.services.knowledge_base import KnowledgeBaseService
 
 
@@ -20,6 +25,16 @@ router = APIRouter(
 )
 
 SessionDependency = Annotated[Session, Depends(get_db)]
+
+
+def get_retrieval_service() -> RetrievalService:
+    return RetrievalService()
+
+
+RetrievalServiceDependency = Annotated[
+    RetrievalService,
+    Depends(get_retrieval_service),
+]
 
 
 @router.post(
@@ -74,6 +89,23 @@ def get_knowledge_base(
         knowledge_base_id,
     )
     return KnowledgeBaseResponse.model_validate(knowledge_base)
+
+
+@router.post(
+    "/{knowledge_base_id}/search",
+    response_model=RetrievalResponse,
+)
+def search_knowledge_base(
+    knowledge_base_id: UUID,
+    request: RetrievalRequest,
+    session: SessionDependency,
+    retrieval_service: RetrievalServiceDependency,
+) -> RetrievalResponse:
+    return retrieval_service.search(
+        session,
+        knowledge_base_id,
+        request,
+    )
 
 
 @router.patch(

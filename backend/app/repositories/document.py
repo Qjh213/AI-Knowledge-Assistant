@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -105,3 +106,21 @@ class DocumentRepository:
         session.refresh(document)
 
         return document
+
+    @staticmethod
+    def get_many_for_knowledge_base(
+        session: Session,
+        knowledge_base_id: UUID,
+        document_ids: Sequence[UUID],
+    ) -> list[Document]:
+        ids = list(set(document_ids))
+
+        if not ids:
+            return []
+
+        statement = select(Document).where(
+            Document.knowledge_base_id == knowledge_base_id,
+            Document.id.in_(ids),
+        )
+
+        return list(session.scalars(statement).all())
