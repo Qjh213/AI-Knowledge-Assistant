@@ -103,3 +103,16 @@ class VectorStoreError(Exception):
     def __init__(self, detail: str) -> None:
         self.detail = detail
         super().__init__(f"Vector store operation failed: {detail}")
+
+
+class DocumentProcessingError(Exception):
+    def __init__(
+        self,
+        document_id: UUID,
+        detail: str,
+    ) -> None:
+        self.document_id = document_id
+        self.detail = detail
+        super().__init__(
+            f"Failed to process document '{document_id}': {detail}"
+        )

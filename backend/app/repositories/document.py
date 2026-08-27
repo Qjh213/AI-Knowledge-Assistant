@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.database.models import Document
+from app.database.models import Document, DocumentStatus
 
 
 class DocumentRepository:
@@ -85,3 +85,23 @@ class DocumentRepository:
     ) -> None:
         session.delete(document)
         session.flush()
+
+    @staticmethod
+    def update_processing_state(
+        session: Session,
+        document: Document,
+        status: DocumentStatus,
+        *,
+        chunk_count: int | None = None,
+        error_message: str | None = None,
+    ) -> Document:
+        document.status = status
+        document.error_message = error_message
+
+        if chunk_count is not None:
+            document.chunk_count = chunk_count
+
+        session.flush()
+        session.refresh(document)
+
+        return document

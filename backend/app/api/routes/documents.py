@@ -19,6 +19,10 @@ from app.schemas.document import (
 )
 from app.services.document import DocumentService
 
+from app.services.document_processing import (
+    DocumentProcessingService,
+)
+
 
 router = APIRouter(
     prefix="/knowledge-bases/{knowledge_base_id}/documents",
@@ -32,6 +36,16 @@ UploadedDocument = Annotated[
 ]
 
 document_service = DocumentService()
+
+
+def get_document_processing_service() -> DocumentProcessingService:
+    return DocumentProcessingService()
+
+
+ProcessingServiceDependency = Annotated[
+    DocumentProcessingService,
+    Depends(get_document_processing_service),
+]
 
 
 @router.post(
@@ -94,6 +108,25 @@ def get_document(
         knowledge_base_id,
         document_id,
     )
+    return DocumentResponse.model_validate(document)
+
+
+@router.post(
+    "/{document_id}/process",
+    response_model=DocumentResponse,
+)
+def process_document(
+    knowledge_base_id: UUID,
+    document_id: UUID,
+    session: SessionDependency,
+    processing_service: ProcessingServiceDependency,
+) -> DocumentResponse:
+    document = processing_service.process(
+        session,
+        knowledge_base_id,
+        document_id,
+    )
+
     return DocumentResponse.model_validate(document)
 
 

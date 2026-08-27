@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from app.core.exceptions import (
     DocumentAlreadyExistsError,
     DocumentNotFoundError,
+    DocumentProcessingError,
     DocumentTooLargeError,
     EmptyDocumentError,
     KnowledgeBaseAlreadyExistsError,
@@ -102,6 +103,18 @@ async def empty_document_handler(
     )
 
 
+async def document_processing_handler(
+    request: Request,
+    exc: DocumentProcessingError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": str(exc),
+            "code": "document_processing_failed",
+        },
+    )
+
 def register_exception_handlers(application: FastAPI) -> None:
     application.add_exception_handler(
         KnowledgeBaseNotFoundError,
@@ -130,4 +143,8 @@ def register_exception_handlers(application: FastAPI) -> None:
     application.add_exception_handler(
         EmptyDocumentError,
         empty_document_handler,
+    )
+    application.add_exception_handler(
+        DocumentProcessingError,
+        document_processing_handler,
     )

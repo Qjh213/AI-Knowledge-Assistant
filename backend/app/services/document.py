@@ -12,16 +12,19 @@ from app.database.models import Document
 from app.repositories.document import DocumentRepository
 from app.services.document_storage import DocumentStorageService
 from app.services.knowledge_base import KnowledgeBaseService
+from app.services.vector_store import VectorStoreService
 
 
 class DocumentService:
     def __init__(
-        self,
-        storage_service: DocumentStorageService | None = None,
+            self,
+            storage_service: DocumentStorageService | None = None,
+            vector_store: VectorStoreService | None = None,
     ) -> None:
         self.storage_service = (
-            storage_service or DocumentStorageService()
+                storage_service or DocumentStorageService()
         )
+        self.vector_store = vector_store
 
     async def upload(
         self,
@@ -138,8 +141,13 @@ class DocumentService:
             document_id,
         )
         file_path = document.file_path
+        vector_store = (
+                self.vector_store or VectorStoreService()
+        )
 
         try:
+            vector_store.delete_document(document.id)
+
             DocumentRepository.delete(
                 session,
                 document,
