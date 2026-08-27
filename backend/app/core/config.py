@@ -38,6 +38,9 @@ class Settings(BaseSettings):
 
     milvus_uri: str = "http://localhost:19530"
     milvus_token: str = ""
+    milvus_uri: str = "http://localhost:19530"
+    milvus_token: str = ""
+    milvus_collection_name: str = "document_chunks"
 
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"

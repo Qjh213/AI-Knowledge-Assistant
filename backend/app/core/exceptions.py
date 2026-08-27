@@ -97,3 +97,9 @@ class EmbeddingServiceError(Exception):
     def __init__(self, detail: str) -> None:
         self.detail = detail
         super().__init__(f"Embedding generation failed: {detail}")
+
+
+class VectorStoreError(Exception):
+    def __init__(self, detail: str) -> None:
+        self.detail = detail
+        super().__init__(f"Vector store operation failed: {detail}")
