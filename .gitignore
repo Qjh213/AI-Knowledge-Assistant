@@ -28,3 +28,6 @@ vectorstore/*
 
 # Logs
 *.log
+
+# Docker runtime data
+docker/volumes/
