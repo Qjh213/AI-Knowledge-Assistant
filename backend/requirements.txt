@@ -9,6 +9,7 @@ langchain-openai
 pydantic
 pydantic-settings
 sqlalchemy
+alembic
 psycopg2-binary
 
 pymilvus
