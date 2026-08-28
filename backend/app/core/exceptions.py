@@ -9,6 +9,20 @@ class KnowledgeBaseNotFoundError(Exception):
         )
 
 
+class ConversationNotFoundError(Exception):
+    def __init__(
+        self,
+        knowledge_base_id: UUID,
+        conversation_id: UUID,
+    ) -> None:
+        self.knowledge_base_id = knowledge_base_id
+        self.conversation_id = conversation_id
+        super().__init__(
+            f"Conversation '{conversation_id}' was not found in "
+            f"knowledge base '{knowledge_base_id}'"
+        )
+
+
 class KnowledgeBaseAlreadyExistsError(Exception):
     def __init__(self, name: str) -> None:
         self.name = name
