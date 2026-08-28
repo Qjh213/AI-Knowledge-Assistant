@@ -8,6 +8,7 @@ from app.database.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.database.models.document import Document
+    from app.database.models.conversation import Conversation
 
 
 class KnowledgeBase(TimestampMixin, Base):
@@ -30,6 +31,11 @@ class KnowledgeBase(TimestampMixin, Base):
     )
 
     documents: Mapped[list["Document"]] = relationship(
+        back_populates="knowledge_base",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    conversations: Mapped[list["Conversation"]] = relationship(
         back_populates="knowledge_base",
         cascade="all, delete-orphan",
         passive_deletes=True,
