@@ -38,13 +38,13 @@ class Settings(BaseSettings):
 
     milvus_uri: str = "http://localhost:19530"
     milvus_token: str = ""
-    milvus_uri: str = "http://localhost:19530"
-    milvus_token: str = ""
     milvus_collection_name: str = "document_chunks"
 
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     chat_model: str = "deepseek-v4-flash"
+    chat_temperature: float = 0.2
+    chat_max_tokens: int = 2048
     embedding_provider: str = "siliconflow"
     embedding_model: str = "BAAI/bge-m3"
     embedding_dimension: int = 1024

@@ -122,3 +122,9 @@ class RetrievalServiceError(Exception):
     def __init__(self, detail: str) -> None:
         self.detail = detail
         super().__init__(f"Retrieval failed: {detail}")
+
+
+class ChatServiceError(Exception):
+    def __init__(self, detail: str) -> None:
+        self.detail = detail
+        super().__init__(f"Chat generation failed: {detail}")

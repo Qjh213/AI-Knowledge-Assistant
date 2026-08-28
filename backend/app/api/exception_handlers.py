@@ -11,6 +11,7 @@ from app.core.exceptions import (
     KnowledgeBaseNotFoundError,
     UnsupportedDocumentTypeError,
     RetrievalServiceError,
+    ChatServiceError,
 )
 
 
@@ -130,6 +131,19 @@ async def retrieval_service_handler(
     )
 
 
+async def chat_service_handler(
+    request: Request,
+    exc: ChatServiceError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "detail": str(exc),
+            "code": "chat_service_unavailable",
+        },
+    )
+
+
 def register_exception_handlers(application: FastAPI) -> None:
     application.add_exception_handler(
         KnowledgeBaseNotFoundError,
@@ -166,4 +180,8 @@ def register_exception_handlers(application: FastAPI) -> None:
     application.add_exception_handler(
         RetrievalServiceError,
         retrieval_service_handler,
+    )
+    application.add_exception_handler(
+        ChatServiceError,
+        chat_service_handler,
     )

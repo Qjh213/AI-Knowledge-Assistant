@@ -18,6 +18,12 @@ from app.schemas.retrieval import (
 from app.services.retrieval import RetrievalService
 from app.services.knowledge_base import KnowledgeBaseService
 
+from app.schemas.rag import (
+    RagAnswerResponse,
+    RagQuestionRequest,
+)
+from app.services.rag import RagService
+
 
 router = APIRouter(
     prefix="/knowledge-bases",
@@ -34,6 +40,16 @@ def get_retrieval_service() -> RetrievalService:
 RetrievalServiceDependency = Annotated[
     RetrievalService,
     Depends(get_retrieval_service),
+]
+
+
+def get_rag_service() -> RagService:
+    return RagService()
+
+
+RagServiceDependency = Annotated[
+    RagService,
+    Depends(get_rag_service),
 ]
 
 
@@ -102,6 +118,23 @@ def search_knowledge_base(
     retrieval_service: RetrievalServiceDependency,
 ) -> RetrievalResponse:
     return retrieval_service.search(
+        session,
+        knowledge_base_id,
+        request,
+    )
+
+
+@router.post(
+    "/{knowledge_base_id}/answer",
+    response_model=RagAnswerResponse,
+)
+def answer_from_knowledge_base(
+    knowledge_base_id: UUID,
+    request: RagQuestionRequest,
+    session: SessionDependency,
+    rag_service: RagServiceDependency,
+) -> RagAnswerResponse:
+    return rag_service.answer(
         session,
         knowledge_base_id,
         request,
