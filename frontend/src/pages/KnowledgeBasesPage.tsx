@@ -8,6 +8,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { getKnowledgeBases } from '../api/knowledgeBases'
 import { CreateKnowledgeBaseDialog } from '../components/knowledge-bases/CreateKnowledgeBaseDialog'
 
@@ -114,8 +115,9 @@ export function KnowledgeBasesPage() {
         knowledgeBasesQuery.data.items.length > 0 && (
           <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {knowledgeBasesQuery.data.items.map((knowledgeBase) => (
-              <article
+              <Link
                 key={knowledgeBase.id}
+                to={`/knowledge-bases/${knowledgeBase.id}`}
                 className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-4">
@@ -136,7 +138,7 @@ export function KnowledgeBasesPage() {
                 <p className="mt-5 text-xs text-slate-400">
                   创建于 {formatDate(knowledgeBase.created_at)}
                 </p>
-              </article>
+              </Link>
             ))}
           </section>
         )}

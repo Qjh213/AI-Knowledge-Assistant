@@ -27,3 +27,13 @@ export function createKnowledgeBase(
     body: JSON.stringify(data),
   })
 }
+
+export function getKnowledgeBase(id: string): Promise<KnowledgeBase> {
+  return apiRequest<KnowledgeBase>(`/knowledge-bases/${id}`)
+}
+
+export function deleteKnowledgeBase(id: string): Promise<void> {
+  return apiRequest<void>(`/knowledge-bases/${id}`, {
+    method: 'DELETE',
+  })
+}
