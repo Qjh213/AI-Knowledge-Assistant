@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   CalendarDays,
   Database,
-  FileUp,
   MessageSquareText,
   RefreshCw,
   Trash2,
@@ -15,6 +14,7 @@ import {
   getKnowledgeBase,
 } from '../api/knowledgeBases'
 import { DeleteKnowledgeBaseDialog } from '../components/knowledge-bases/DeleteKnowledgeBaseDialog'
+import { DocumentPanel } from '../components/documents/DocumentPanel'
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -132,26 +132,9 @@ export function KnowledgeBaseDetailPage() {
         </button>
       </div>
 
-      <section className="mt-10 grid gap-5 lg:grid-cols-2">
-        <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/40">
-          <div className="flex items-center gap-3">
-            <div className="grid size-10 place-items-center rounded-xl bg-sky-50 text-sky-600">
-              <FileUp size={20} />
-            </div>
-            <div>
-              <h2 className="font-semibold text-slate-950">知识文档</h2>
-              <p className="text-xs text-slate-500">上传、处理并管理资料</p>
-            </div>
-          </div>
-          <p className="mt-6 text-sm leading-6 text-slate-500">
-            下一步将在这里接入文档列表、上传进度、处理状态和失败重试。
-          </p>
-          <button className="mt-6 inline-flex h-10 items-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800">
-            <FileUp size={17} />
-            上传文档
-          </button>
-        </article>
+      <DocumentPanel knowledgeBaseId={knowledgeBase.id} />
 
+      <section className="mt-5">
         <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/40">
           <div className="flex items-center gap-3">
             <div className="grid size-10 place-items-center rounded-xl bg-violet-50 text-violet-600">
