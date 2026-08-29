@@ -11,6 +11,15 @@ from app.schemas.conversation import (
     ConversationResponse,
     ConversationUpdate,
 )
+from app.schemas.message import (
+    MessageCreate,
+    MessageListResponse,
+    MessageResponse,
+    MessageTurnResponse,
+)
+from app.services.conversation_message import (
+    ConversationMessageService,
+)
 from app.services.conversation import ConversationService
 
 
@@ -20,6 +29,16 @@ router = APIRouter(
 )
 
 SessionDependency = Annotated[Session, Depends(get_db)]
+
+
+def get_conversation_message_service() -> ConversationMessageService:
+    return ConversationMessageService()
+
+
+ConversationMessageServiceDependency = Annotated[
+    ConversationMessageService,
+    Depends(get_conversation_message_service),
+]
 
 
 @router.post(
@@ -119,3 +138,62 @@ def delete_conversation(
         conversation_id,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{conversation_id}/messages",
+    response_model=MessageTurnResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def send_message(
+    knowledge_base_id: UUID,
+    conversation_id: UUID,
+    data: MessageCreate,
+    session: SessionDependency,
+    message_service: ConversationMessageServiceDependency,
+) -> MessageTurnResponse:
+    user_message, assistant_message = message_service.send(
+        session,
+        knowledge_base_id,
+        conversation_id,
+        data,
+    )
+
+    return MessageTurnResponse(
+        conversation_id=conversation_id,
+        user_message=MessageResponse.model_validate(user_message),
+        assistant_message=MessageResponse.model_validate(
+            assistant_message
+        ),
+    )
+
+
+@router.get(
+    "/{conversation_id}/messages",
+    response_model=MessageListResponse,
+)
+def list_messages(
+    knowledge_base_id: UUID,
+    conversation_id: UUID,
+    session: SessionDependency,
+    message_service: ConversationMessageServiceDependency,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> MessageListResponse:
+    items, total = message_service.list(
+        session,
+        knowledge_base_id,
+        conversation_id,
+        offset=offset,
+        limit=limit,
+    )
+
+    return MessageListResponse(
+        items=[
+            MessageResponse.model_validate(item)
+            for item in items
+        ],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
