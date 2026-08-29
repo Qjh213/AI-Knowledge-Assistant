@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   CalendarDays,
   Database,
-  MessageSquareText,
   RefreshCw,
   Trash2,
 } from 'lucide-react'
@@ -14,6 +13,7 @@ import {
   getKnowledgeBase,
 } from '../api/knowledgeBases'
 import { DeleteKnowledgeBaseDialog } from '../components/knowledge-bases/DeleteKnowledgeBaseDialog'
+import { ConversationPanel } from '../components/conversations/ConversationPanel'
 import { DocumentPanel } from '../components/documents/DocumentPanel'
 
 function formatDateTime(value: string) {
@@ -134,26 +134,7 @@ export function KnowledgeBaseDetailPage() {
 
       <DocumentPanel knowledgeBaseId={knowledgeBase.id} />
 
-      <section className="mt-5">
-        <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/40">
-          <div className="flex items-center gap-3">
-            <div className="grid size-10 place-items-center rounded-xl bg-violet-50 text-violet-600">
-              <MessageSquareText size={20} />
-            </div>
-            <div>
-              <h2 className="font-semibold text-slate-950">知识对话</h2>
-              <p className="text-xs text-slate-500">基于文档进行连续问答</p>
-            </div>
-          </div>
-          <p className="mt-6 text-sm leading-6 text-slate-500">
-            文档处理完成后，可以创建会话，让助手结合历史消息和引用来源回答问题。
-          </p>
-          <button className="mt-6 inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:border-indigo-200 hover:text-indigo-700">
-            <MessageSquareText size={17} />
-            开始对话
-          </button>
-        </article>
-      </section>
+      <ConversationPanel knowledgeBaseId={knowledgeBase.id} />
 
       <DeleteKnowledgeBaseDialog
         open={deleteDialogOpen}

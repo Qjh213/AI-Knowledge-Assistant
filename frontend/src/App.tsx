@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import { KnowledgeBaseDetailPage } from './pages/KnowledgeBaseDetailPage'
 import { KnowledgeBasesPage } from './pages/KnowledgeBasesPage'
+import { ConversationPage } from './pages/ConversationPage'
 
 function App() {
   return (
@@ -12,6 +13,10 @@ function App() {
         <Route
           path="/knowledge-bases/:knowledgeBaseId"
           element={<KnowledgeBaseDetailPage />}
+        />
+        <Route
+          path="/knowledge-bases/:knowledgeBaseId/conversations/:conversationId"
+          element={<ConversationPage />}
         />
       </Route>
     </Routes>
