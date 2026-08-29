@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
     database_url: str = (
         "postgresql+psycopg2://postgres:postgres@localhost:5432/knowledge"

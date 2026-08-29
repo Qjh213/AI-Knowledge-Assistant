@@ -1,0 +1,22 @@
+export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'failed'
+
+export interface Document {
+  id: string
+  knowledge_base_id: string
+  original_filename: string
+  mime_type: string
+  file_size: number
+  checksum: string
+  status: DocumentStatus
+  error_message: string | null
+  chunk_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface DocumentListResponse {
+  items: Document[]
+  total: number
+  offset: number
+  limit: number
+}
