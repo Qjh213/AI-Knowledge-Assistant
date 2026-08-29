@@ -1,6 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
-
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     chat_model: str = "deepseek-v4-flash"
     chat_temperature: float = 0.2
     chat_max_tokens: int = 2048
+    conversation_history_limit: int = Field(
+        default=10,
+        ge=2,
+        le=100,
+    )
     embedding_provider: str = "siliconflow"
     embedding_model: str = "BAAI/bge-m3"
     embedding_dimension: int = 1024

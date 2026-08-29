@@ -12,6 +12,7 @@ from app.core.exceptions import (
     UnsupportedDocumentTypeError,
     RetrievalServiceError,
     ChatServiceError,
+    ConversationNotFoundError,
 )
 
 
@@ -24,6 +25,19 @@ async def knowledge_base_not_found_handler(
         content={
             "detail": str(exc),
             "code": "knowledge_base_not_found",
+        },
+    )
+
+
+async def conversation_not_found_handler(
+    request: Request,
+    exc: ConversationNotFoundError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "detail": str(exc),
+            "code": "conversation_not_found",
         },
     )
 
@@ -148,6 +162,10 @@ def register_exception_handlers(application: FastAPI) -> None:
     application.add_exception_handler(
         KnowledgeBaseNotFoundError,
         knowledge_base_not_found_handler,
+    )
+    application.add_exception_handler(
+        ConversationNotFoundError,
+        conversation_not_found_handler,
     )
     application.add_exception_handler(
         KnowledgeBaseAlreadyExistsError,
