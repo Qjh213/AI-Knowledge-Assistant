@@ -10,6 +10,7 @@ from app.schemas.rag import RagQuestionRequest
 from app.services.conversation import ConversationService
 from app.services.query_rewriter import QueryRewriteService
 from app.services.rag import RagService
+from app.core.config import settings
 
 
 class ConversationMessageService:
@@ -17,9 +18,15 @@ class ConversationMessageService:
         self,
         query_rewriter: QueryRewriteService | None = None,
         rag_service: RagService | None = None,
-        history_limit: int = 10,
+        history_limit: int | None = None,
     ) -> None:
-        if history_limit <= 0:
+        resolved_history_limit = (
+            history_limit
+            if history_limit is not None
+            else settings.conversation_history_limit
+        )
+
+        if resolved_history_limit <= 0:
             raise ValueError(
                 "History limit must be greater than zero"
             )
@@ -28,7 +35,7 @@ class ConversationMessageService:
             query_rewriter or QueryRewriteService()
         )
         self.rag_service = rag_service or RagService()
-        self.history_limit = history_limit
+        self.history_limit = resolved_history_limit
 
     @staticmethod
     def list(
