@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -7,6 +8,7 @@ from app.database.models import Message, MessageRole
 from app.repositories.message import MessageRepository
 from app.schemas.message import MessageCreate
 from app.schemas.rag import RagAnswerResponse, RagCitation
+from app.schemas.streaming import StreamEventType
 from app.services.conversation import ConversationService
 from app.services.conversation_message import (
     ConversationMessageService,
@@ -279,3 +281,147 @@ def test_reject_invalid_history_limit():
             rag_service=object(),
             history_limit=0,
         )
+
+
+class FakeStreamingRagService:
+    def __init__(self, citations, chunks) -> None:
+        self.citations = citations
+        self.chunks = chunks
+
+    def stream_answer(self, session, knowledge_base_id, request):
+        return self.citations, iter(self.chunks)
+
+
+def test_stream_saves_complete_assistant_message(monkeypatch):
+    knowledge_base_id = uuid4()
+    conversation_id = uuid4()
+    now = datetime.now(UTC)
+    conversation = SimpleNamespace(
+        title=None,
+        updated_at=None,
+    )
+    citation = create_rag_response(
+        knowledge_base_id
+    ).citations[0]
+    created_messages: list[Message] = []
+
+    monkeypatch.setattr(
+        ConversationService,
+        "get",
+        lambda *args: conversation,
+    )
+    monkeypatch.setattr(
+        MessageRepository,
+        "list_recent",
+        lambda *args, **kwargs: [],
+    )
+
+    def fake_create(
+        session,
+        conversation_id,
+        role,
+        content,
+        sources=None,
+    ):
+        message = Message(
+            id=uuid4(),
+            conversation_id=conversation_id,
+            role=role,
+            content=content,
+            sources=sources,
+            created_at=now,
+            updated_at=now,
+        )
+        created_messages.append(message)
+        return message
+
+    monkeypatch.setattr(MessageRepository, "create", fake_create)
+    session = FakeSession()
+    service = ConversationMessageService(
+        query_rewriter=FakeQueryRewriter(),
+        rag_service=FakeStreamingRagService(
+            [citation],
+            ["Milvus ", "用于向量检索。[1]"],
+        ),
+    )
+
+    events = list(
+        service.stream(
+            session,
+            knowledge_base_id,
+            conversation_id,
+            MessageCreate(content="它有什么作用？"),
+        )
+    )
+
+    assert [event for event, _ in events] == [
+        StreamEventType.USER_MESSAGE,
+        StreamEventType.CITATIONS,
+        StreamEventType.TOKEN,
+        StreamEventType.TOKEN,
+        StreamEventType.DONE,
+    ]
+    assert len(created_messages) == 2
+    assert created_messages[1].content == (
+        "Milvus 用于向量检索。[1]"
+    )
+    assert created_messages[1].sources[0]["reference"] == 1
+    assert session.rolled_back is False
+
+
+def test_stream_keeps_user_message_when_generation_fails(monkeypatch):
+    knowledge_base_id = uuid4()
+    conversation_id = uuid4()
+    now = datetime.now(UTC)
+    conversation = SimpleNamespace(title="测试", updated_at=None)
+    created_messages: list[Message] = []
+
+    monkeypatch.setattr(
+        ConversationService,
+        "get",
+        lambda *args: conversation,
+    )
+    monkeypatch.setattr(
+        MessageRepository,
+        "list_recent",
+        lambda *args, **kwargs: [],
+    )
+
+    def fake_create(session, conversation_id, role, content, sources=None):
+        message = Message(
+            id=uuid4(),
+            conversation_id=conversation_id,
+            role=role,
+            content=content,
+            sources=sources,
+            created_at=now,
+            updated_at=now,
+        )
+        created_messages.append(message)
+        return message
+
+    def failing_chunks():
+        yield "部分回答"
+        raise RuntimeError("stream interrupted")
+
+    monkeypatch.setattr(MessageRepository, "create", fake_create)
+    session = FakeSession()
+    service = ConversationMessageService(
+        query_rewriter=FakeQueryRewriter(),
+        rag_service=FakeStreamingRagService([], failing_chunks()),
+    )
+
+    events = list(
+        service.stream(
+            session,
+            knowledge_base_id,
+            conversation_id,
+            MessageCreate(content="测试问题"),
+        )
+    )
+
+    assert [event for event, _ in events][-1] == StreamEventType.ERROR
+    assert events[-1][1].detail == "stream interrupted"
+    assert len(created_messages) == 1
+    assert created_messages[0].role == MessageRole.USER
+    assert session.rolled_back is True

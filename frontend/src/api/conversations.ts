@@ -1,10 +1,11 @@
-import { apiRequest } from '../lib/apiClient'
+import { API_BASE_URL, ApiError, apiRequest } from '../lib/apiClient'
 import type {
   Conversation,
   ConversationListResponse,
   MessageCreate,
   MessageListResponse,
   MessageTurnResponse,
+  ConversationStreamEvent,
 } from '../types/conversation'
 
 function conversationsPath(knowledgeBaseId: string) {
@@ -72,4 +73,116 @@ export function sendMessage(
       body: JSON.stringify(data),
     },
   )
+}
+
+function parseStreamEvent(block: string): ConversationStreamEvent | null {
+  let eventName = ''
+  const dataLines: string[] = []
+
+  for (const line of block.split('\n')) {
+    if (line.startsWith('event:')) {
+      eventName = line.slice('event:'.length).trim()
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice('data:'.length).trimStart())
+    }
+  }
+
+  if (!eventName || dataLines.length === 0) {
+    return null
+  }
+
+  const supportedEvents = new Set([
+    'user_message',
+    'citations',
+    'token',
+    'done',
+    'error',
+  ])
+
+  if (!supportedEvents.has(eventName)) {
+    return null
+  }
+
+  return {
+    event: eventName,
+    data: JSON.parse(dataLines.join('\n')),
+  } as ConversationStreamEvent
+}
+
+export async function streamMessage(
+  knowledgeBaseId: string,
+  conversationId: string,
+  data: MessageCreate,
+  onEvent: (event: ConversationStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}${conversationsPath(knowledgeBaseId)}/${conversationId}/messages/stream`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      signal,
+    },
+  )
+
+  if (!response.ok) {
+    let detail = `请求失败（HTTP ${response.status}）`
+
+    try {
+      const body = (await response.json()) as { detail?: string }
+      detail = body.detail ?? detail
+    } catch {
+      // The server may return an empty or non-JSON error response.
+    }
+
+    throw new ApiError(detail, response.status)
+  }
+
+  if (!response.body) {
+    throw new Error('浏览器无法读取流式响应。')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      buffer += decoder.decode(value, { stream: !done })
+
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary !== -1) {
+        const block = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + 2)
+        const event = parseStreamEvent(block)
+
+        if (event) {
+          onEvent(event)
+
+          if (event.event === 'error') {
+            throw new Error(event.data.detail)
+          }
+        }
+
+        boundary = buffer.indexOf('\n\n')
+      }
+
+      if (done) {
+        break
+      }
+    }
+
+    const finalEvent = parseStreamEvent(buffer.trim())
+    if (finalEvent) {
+      onEvent(finalEvent)
+
+      if (finalEvent.event === 'error') {
+        throw new Error(finalEvent.data.detail)
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
 }

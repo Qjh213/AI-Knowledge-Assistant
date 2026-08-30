@@ -6,21 +6,28 @@ import {
   FileText,
   LoaderCircle,
   Send,
+  Square,
   User,
 } from 'lucide-react'
-import { useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   getConversation,
   getMessages,
-  sendMessage,
+  streamMessage,
 } from '../api/conversations'
 import { getKnowledgeBase } from '../api/knowledgeBases'
+import type { Message, RagCitation } from '../types/conversation'
 
 export function ConversationPage() {
   const { knowledgeBaseId, conversationId } = useParams()
   const queryClient = useQueryClient()
   const [content, setContent] = useState('')
+  const [streamedUserMessage, setStreamedUserMessage] =
+    useState<Message | null>(null)
+  const [streamedAnswer, setStreamedAnswer] = useState('')
+  const [streamedCitations, setStreamedCitations] = useState<RagCitation[]>([])
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const idsReady = Boolean(knowledgeBaseId && conversationId)
   const knowledgeBaseQuery = useQuery({
@@ -40,14 +47,47 @@ export function ConversationPage() {
   })
 
   const sendMutation = useMutation({
-    mutationFn: (message: string) =>
-      sendMessage(knowledgeBaseId!, conversationId!, {
-        content: message,
-        retrieval_limit: 5,
-        min_score: 0.3,
-      }),
-    onSuccess: async () => {
+    mutationFn: async (message: string) => {
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+
+      await streamMessage(
+        knowledgeBaseId!,
+        conversationId!,
+        {
+          content: message,
+          retrieval_limit: 5,
+          min_score: 0.3,
+        },
+        ({ event, data }) => {
+          switch (event) {
+            case 'user_message':
+              setStreamedUserMessage(data.message)
+              break
+            case 'citations':
+              setStreamedCitations(data.citations)
+              break
+            case 'token':
+              setStreamedAnswer((current) => current + data.content)
+              break
+            case 'done':
+              setStreamedAnswer(data.message.content)
+              setStreamedCitations(data.message.sources ?? [])
+              break
+            case 'error':
+              break
+          }
+        },
+        controller.signal,
+      )
+    },
+    onMutate: () => {
       setContent('')
+      setStreamedUserMessage(null)
+      setStreamedAnswer('')
+      setStreamedCitations([])
+    },
+    onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: ['messages', knowledgeBaseId, conversationId],
@@ -59,6 +99,20 @@ export function ConversationPage() {
           queryKey: ['conversations', knowledgeBaseId],
         }),
       ])
+      setStreamedUserMessage(null)
+      setStreamedAnswer('')
+      setStreamedCitations([])
+    },
+    onError: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['messages', knowledgeBaseId, conversationId],
+      })
+      setStreamedUserMessage(null)
+      setStreamedAnswer('')
+      setStreamedCitations([])
+    },
+    onSettled: () => {
+      abortControllerRef.current = null
     },
   })
 
@@ -82,6 +136,22 @@ export function ConversationPage() {
   }
 
   const messages = messagesQuery.data?.items ?? []
+  const streamingAssistant: Message | null = streamedAnswer
+    ? {
+        id: 'streaming-assistant',
+        conversation_id: conversationId ?? '',
+        role: 'assistant',
+        content: streamedAnswer,
+        sources: streamedCitations,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+    : null
+  const visibleMessages = [
+    ...messages,
+    ...(streamedUserMessage ? [streamedUserMessage] : []),
+    ...(streamingAssistant ? [streamingAssistant] : []),
+  ]
 
   return (
     <div className="flex min-h-[calc(100vh-6rem)] flex-col">
@@ -134,7 +204,7 @@ export function ConversationPage() {
         )}
 
         <div className="mx-auto space-y-6">
-          {messages.map((message) => {
+          {visibleMessages.map((message) => {
             const isUser = message.role === 'user'
             return (
               <article
@@ -192,7 +262,7 @@ export function ConversationPage() {
             )
           })}
 
-          {sendMutation.isPending && (
+          {sendMutation.isPending && !streamingAssistant && (
             <div className="flex items-center gap-3">
               <div className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white">
                 <Bot size={18} />
@@ -209,8 +279,11 @@ export function ConversationPage() {
       <footer className="sticky bottom-0 border-t border-slate-200 bg-[#f5f7fb]/95 pt-4 pb-2 backdrop-blur">
         {sendMutation.isError && (
           <p className="mb-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {sendMutation.error instanceof Error
-              ? sendMutation.error.message
+            {sendMutation.error instanceof DOMException &&
+            sendMutation.error.name === 'AbortError'
+              ? '已停止生成回答。'
+              : sendMutation.error instanceof Error
+                ? sendMutation.error.message
               : '发送消息失败，请重试。'}
           </p>
         )}
@@ -228,18 +301,25 @@ export function ConversationPage() {
             placeholder="询问知识库中的内容…"
             className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-slate-400 disabled:opacity-60"
           />
-          <button
-            type="submit"
-            aria-label="发送消息"
-            disabled={!content.trim() || sendMutation.isPending}
-            className="grid size-11 shrink-0 place-items-center rounded-xl bg-indigo-600 text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
-          >
-            {sendMutation.isPending ? (
-              <LoaderCircle size={19} className="animate-spin" />
-            ) : (
+          {sendMutation.isPending ? (
+            <button
+              type="button"
+              aria-label="停止生成"
+              onClick={() => abortControllerRef.current?.abort()}
+              className="grid size-11 shrink-0 place-items-center rounded-xl bg-slate-900 text-white transition hover:bg-slate-700"
+            >
+              <Square size={16} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              aria-label="发送消息"
+              disabled={!content.trim()}
+              className="grid size-11 shrink-0 place-items-center rounded-xl bg-indigo-600 text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+            >
               <Send size={19} />
-            )}
-          </button>
+            </button>
+          )}
         </form>
         <p className="mt-2 text-center text-[11px] text-slate-400">
           Enter 发送，Shift + Enter 换行。回答仅依据知识库资料生成。

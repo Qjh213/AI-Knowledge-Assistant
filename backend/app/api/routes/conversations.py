@@ -2,6 +2,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
@@ -21,6 +22,7 @@ from app.services.conversation_message import (
     ConversationMessageService,
 )
 from app.services.conversation import ConversationService
+from app.services.sse import encode_sse
 
 
 router = APIRouter(
@@ -165,6 +167,38 @@ def send_message(
         assistant_message=MessageResponse.model_validate(
             assistant_message
         ),
+    )
+
+
+@router.post(
+    "/{conversation_id}/messages/stream",
+    response_class=StreamingResponse,
+)
+def stream_message(
+    knowledge_base_id: UUID,
+    conversation_id: UUID,
+    data: MessageCreate,
+    session: SessionDependency,
+    message_service: ConversationMessageServiceDependency,
+) -> StreamingResponse:
+    events = message_service.stream(
+        session,
+        knowledge_base_id,
+        conversation_id,
+        data,
+    )
+
+    def encoded_events():
+        for event, payload in events:
+            yield encode_sse(event, payload)
+
+    return StreamingResponse(
+        encoded_events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
