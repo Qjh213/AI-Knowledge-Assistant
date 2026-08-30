@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+
 from openai import OpenAI
 
 from app.core.config import settings
@@ -96,3 +98,62 @@ class ChatService:
             )
 
         return content.strip()
+
+
+    def stream(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> Iterator[str]:
+        if not system_prompt.strip():
+            raise ChatServiceError(
+                "system prompt cannot be empty"
+            )
+
+        if not user_prompt.strip():
+            raise ChatServiceError(
+                "user prompt cannot be empty"
+            )
+
+        def generate_chunks() -> Iterator[str]:
+            received_content = False
+
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": system_prompt.strip(),
+                        },
+                        {
+                            "role": "user",
+                            "content": user_prompt.strip(),
+                        },
+                    ],
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    stream=True,
+                )
+
+                for chunk in response:
+                    if not chunk.choices:
+                        continue
+
+                    content = chunk.choices[0].delta.content
+
+                    if content:
+                        received_content = True
+                        yield content
+
+            except ChatServiceError:
+                raise
+            except Exception as exc:
+                raise ChatServiceError(str(exc)) from exc
+
+            if not received_content:
+                raise ChatServiceError(
+                    "model returned an empty response"
+                )
+
+        return generate_chunks()

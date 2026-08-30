@@ -53,3 +53,25 @@ export interface MessageTurnResponse {
   user_message: Message
   assistant_message: Message
 }
+
+export type ConversationStreamEvent =
+  | {
+      event: 'user_message'
+      data: { message: Message }
+    }
+  | {
+      event: 'citations'
+      data: { citations: RagCitation[] }
+    }
+  | {
+      event: 'token'
+      data: { content: string }
+    }
+  | {
+      event: 'done'
+      data: { message: Message }
+    }
+  | {
+      event: 'error'
+      data: { detail: string }
+    }

@@ -1,16 +1,31 @@
+from collections.abc import Iterator
 from datetime import UTC, datetime
+from typing import TypeAlias
 from uuid import UUID
 
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database.models import Message, MessageRole
 from app.repositories.message import MessageRepository
 from app.schemas.message import MessageCreate
 from app.schemas.rag import RagQuestionRequest
+from app.schemas.message import MessageResponse
+from app.schemas.streaming import (
+    StreamCitationsData,
+    StreamDoneData,
+    StreamErrorData,
+    StreamEventType,
+    StreamTokenData,
+    StreamUserMessageData,
+)
 from app.services.conversation import ConversationService
 from app.services.query_rewriter import QueryRewriteService
 from app.services.rag import RagService
 from app.core.config import settings
+
+
+StreamEvent: TypeAlias = tuple[StreamEventType, BaseModel]
 
 
 class ConversationMessageService:
@@ -129,6 +144,108 @@ class ConversationMessageService:
         except Exception:
             session.rollback()
             raise
+
+    def stream(
+        self,
+        session: Session,
+        knowledge_base_id: UUID,
+        conversation_id: UUID,
+        data: MessageCreate,
+    ) -> Iterator[StreamEvent]:
+        conversation = ConversationService.get(
+            session,
+            knowledge_base_id,
+            conversation_id,
+        )
+
+        try:
+            history = MessageRepository.list_recent(
+                session,
+                conversation_id,
+                limit=self.history_limit,
+            )
+            standalone_question = self.query_rewriter.rewrite(
+                question=data.content,
+                history=history,
+            )
+            citations, chunks = self.rag_service.stream_answer(
+                session,
+                knowledge_base_id,
+                RagQuestionRequest(
+                    question=standalone_question,
+                    retrieval_limit=data.retrieval_limit,
+                    min_score=data.min_score,
+                ),
+            )
+            sources = [
+                citation.model_dump(mode="json")
+                for citation in citations
+            ]
+            user_message = MessageRepository.create(
+                session,
+                conversation_id,
+                MessageRole.USER,
+                data.content,
+            )
+
+            if conversation.title is None:
+                conversation.title = self._create_title(data.content)
+
+            conversation.updated_at = datetime.now(UTC)
+            session.commit()
+            session.refresh(user_message)
+
+        except Exception:
+            session.rollback()
+            raise
+
+        user_event = StreamUserMessageData(
+            message=MessageResponse.model_validate(user_message)
+        )
+        citations_event = StreamCitationsData(citations=citations)
+
+        def generate_events() -> Iterator[StreamEvent]:
+            yield StreamEventType.USER_MESSAGE, user_event
+            yield StreamEventType.CITATIONS, citations_event
+
+            answer_chunks: list[str] = []
+
+            try:
+                for chunk in chunks:
+                    answer_chunks.append(chunk)
+                    yield (
+                        StreamEventType.TOKEN,
+                        StreamTokenData(content=chunk),
+                    )
+
+                assistant_message = MessageRepository.create(
+                    session,
+                    conversation_id,
+                    MessageRole.ASSISTANT,
+                    "".join(answer_chunks),
+                    sources=sources or None,
+                )
+                conversation.updated_at = datetime.now(UTC)
+                session.commit()
+                session.refresh(assistant_message)
+
+                yield (
+                    StreamEventType.DONE,
+                    StreamDoneData(
+                        message=MessageResponse.model_validate(
+                            assistant_message
+                        )
+                    ),
+                )
+
+            except Exception as exc:
+                session.rollback()
+                yield (
+                    StreamEventType.ERROR,
+                    StreamErrorData(detail=str(exc)),
+                )
+
+        return generate_events()
 
     @staticmethod
     def _create_title(content: str) -> str:

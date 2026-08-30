@@ -172,3 +172,162 @@ def test_reject_empty_model_name():
         match="chat model",
     ):
         create_service(model=" ")
+
+
+class FakeStreamingCompletionsAPI:
+    def __init__(
+        self,
+        chunks=None,
+    ) -> None:
+        self.chunks = (
+            chunks
+            if chunks is not None
+            else ["Milvus", " 是", "向量数据库。"]
+        )
+        self.arguments = None
+
+    def create(self, **kwargs):
+        self.arguments = kwargs
+
+        def iterator():
+            for value in self.chunks:
+                if isinstance(value, Exception):
+                    raise value
+
+                yield SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            delta=SimpleNamespace(
+                                content=value,
+                            )
+                        )
+                    ]
+                )
+
+        return iterator()
+
+
+class FakeStreamingOpenAIClient:
+    def __init__(self, chunks=None) -> None:
+        self.completions = FakeStreamingCompletionsAPI(
+            chunks=chunks,
+        )
+        self.chat = SimpleNamespace(
+            completions=self.completions,
+        )
+
+
+def test_stream_chat_answer_in_chunks():
+    client = FakeStreamingOpenAIClient(
+        chunks=["Milvus", " 用于", "向量检索。"],
+    )
+    service = create_service(client)
+
+    chunks = list(
+        service.stream(
+            system_prompt="  你是知识库助手。  ",
+            user_prompt="  Milvus 有什么作用？  ",
+        )
+    )
+
+    assert chunks == [
+        "Milvus",
+        " 用于",
+        "向量检索。",
+    ]
+
+    arguments = client.completions.arguments
+
+    assert arguments["stream"] is True
+    assert arguments["model"] == "deepseek-v4-flash"
+    assert arguments["temperature"] == 0.2
+    assert arguments["max_tokens"] == 512
+    assert arguments["messages"] == [
+        {
+            "role": "system",
+            "content": "你是知识库助手。",
+        },
+        {
+            "role": "user",
+            "content": "Milvus 有什么作用？",
+        },
+    ]
+
+
+def test_stream_skips_empty_chunks():
+    client = FakeStreamingOpenAIClient(
+        chunks=["Milvus", None, "", " 完成"],
+    )
+    service = create_service(client)
+
+    assert list(
+        service.stream(
+            system_prompt="system",
+            user_prompt="question",
+        )
+    ) == ["Milvus", " 完成"]
+
+
+def test_stream_rejects_empty_response():
+    client = FakeStreamingOpenAIClient(
+        chunks=[None, "", None],
+    )
+    service = create_service(client)
+
+    with pytest.raises(
+        ChatServiceError,
+        match="empty response",
+    ):
+        list(
+            service.stream(
+                system_prompt="system",
+                user_prompt="question",
+            )
+        )
+
+
+def test_stream_wraps_midstream_error():
+    client = FakeStreamingOpenAIClient(
+        chunks=[
+            "部分回答",
+            RuntimeError("stream interrupted"),
+        ],
+    )
+    service = create_service(client)
+
+    stream = service.stream(
+        system_prompt="system",
+        user_prompt="question",
+    )
+
+    assert next(stream) == "部分回答"
+
+    with pytest.raises(
+        ChatServiceError,
+        match="stream interrupted",
+    ):
+        next(stream)
+
+
+@pytest.mark.parametrize(
+    ("system_prompt", "user_prompt", "message"),
+    [
+        ("   ", "question", "system prompt"),
+        ("system", "   ", "user prompt"),
+    ],
+)
+def test_stream_rejects_empty_prompts(
+    system_prompt,
+    user_prompt,
+    message,
+):
+    service = create_service()
+
+    with pytest.raises(
+        ChatServiceError,
+        match=message,
+    ):
+        service.stream(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )

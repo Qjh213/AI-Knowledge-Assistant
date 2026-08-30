@@ -11,6 +11,14 @@ from app.api.routes.conversations import (
 )
 from app.database.models import MessageRole
 from app.main import app
+from app.schemas.message import MessageResponse
+from app.schemas.streaming import (
+    StreamCitationsData,
+    StreamDoneData,
+    StreamEventType,
+    StreamTokenData,
+    StreamUserMessageData,
+)
 
 
 client = TestClient(app)
@@ -20,6 +28,7 @@ class FakeConversationMessageService:
     def __init__(self) -> None:
         self.send_arguments = None
         self.list_arguments = None
+        self.stream_arguments = None
 
     def send(
         self,
@@ -66,6 +75,60 @@ class FakeConversationMessageService:
         )
 
         return user_message, assistant_message
+
+    def stream(
+        self,
+        session,
+        knowledge_base_id,
+        conversation_id,
+        data,
+    ):
+        self.stream_arguments = (
+            session,
+            knowledge_base_id,
+            conversation_id,
+            data,
+        )
+        now = datetime.now(UTC)
+        user_message = MessageResponse(
+            id=uuid4(),
+            conversation_id=conversation_id,
+            role=MessageRole.USER,
+            content=data.content,
+            sources=None,
+            created_at=now,
+            updated_at=now,
+        )
+        assistant_message = MessageResponse(
+            id=uuid4(),
+            conversation_id=conversation_id,
+            role=MessageRole.ASSISTANT,
+            content="Milvus 是向量数据库。[1]",
+            sources=None,
+            created_at=now,
+            updated_at=now,
+        )
+
+        yield (
+            StreamEventType.USER_MESSAGE,
+            StreamUserMessageData(message=user_message),
+        )
+        yield (
+            StreamEventType.CITATIONS,
+            StreamCitationsData(citations=[]),
+        )
+        yield (
+            StreamEventType.TOKEN,
+            StreamTokenData(content="Milvus 是"),
+        )
+        yield (
+            StreamEventType.TOKEN,
+            StreamTokenData(content="向量数据库。[1]"),
+        )
+        yield (
+            StreamEventType.DONE,
+            StreamDoneData(message=assistant_message),
+        )
 
     def list(
         self,
@@ -176,6 +239,49 @@ def test_list_conversation_messages(fake_dependencies):
         2,
         25,
     )
+
+
+def test_stream_conversation_message(fake_dependencies):
+    fake_session, fake_service = fake_dependencies
+    knowledge_base_id = uuid4()
+    conversation_id = uuid4()
+
+    response = client.post(
+        f"/api/v1/knowledge-bases/{knowledge_base_id}"
+        f"/conversations/{conversation_id}/messages/stream",
+        json={"content": "  Milvus 是什么？  "},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith(
+        "text/event-stream"
+    )
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.headers["x-accel-buffering"] == "no"
+    assert response.text.count("event: token") == 2
+    assert "event: user_message" in response.text
+    assert "event: citations" in response.text
+    assert "event: done" in response.text
+    assert "Milvus 是" in response.text
+
+    arguments = fake_service.stream_arguments
+    assert arguments[0] is fake_session
+    assert arguments[1] == knowledge_base_id
+    assert arguments[2] == conversation_id
+    assert arguments[3].content == "Milvus 是什么？"
+
+
+def test_reject_empty_stream_message(fake_dependencies):
+    knowledge_base_id = uuid4()
+    conversation_id = uuid4()
+
+    response = client.post(
+        f"/api/v1/knowledge-bases/{knowledge_base_id}"
+        f"/conversations/{conversation_id}/messages/stream",
+        json={"content": "   "},
+    )
+
+    assert response.status_code == 422
 
 
 def test_reject_empty_conversation_message(fake_dependencies):

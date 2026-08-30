@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -29,6 +31,13 @@ NO_CONTEXT_ANSWER = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedRagAnswer:
+    question: str
+    citations: list[RagCitation]
+    user_prompt: str | None
+
+
 class RagService:
     def __init__(
         self,
@@ -48,6 +57,33 @@ class RagService:
         knowledge_base_id: UUID,
         request: RagQuestionRequest,
     ) -> RagAnswerResponse:
+        prepared = self.prepare(
+            session,
+            knowledge_base_id,
+            request,
+        )
+
+        if not prepared.citations:
+            answer = NO_CONTEXT_ANSWER
+        else:
+            answer = self.chat_service.generate(
+                system_prompt=SYSTEM_PROMPT,
+                user_prompt=prepared.user_prompt or "",
+            )
+
+        return RagAnswerResponse(
+            knowledge_base_id=knowledge_base_id,
+            question=prepared.question,
+            answer=answer,
+            citations=prepared.citations,
+        )
+
+    def prepare(
+        self,
+        session: Session,
+        knowledge_base_id: UUID,
+        request: RagQuestionRequest,
+    ) -> PreparedRagAnswer:
         retrieval_response = self.retrieval_service.search(
             session,
             knowledge_base_id,
@@ -75,11 +111,10 @@ class RagService:
         ]
 
         if not citations:
-            return RagAnswerResponse(
-                knowledge_base_id=knowledge_base_id,
+            return PreparedRagAnswer(
                 question=request.question,
-                answer=NO_CONTEXT_ANSWER,
                 citations=[],
+                user_prompt=None,
             )
 
         context = self._build_context(citations)
@@ -88,17 +123,33 @@ class RagService:
             context,
         )
 
-        answer = self.chat_service.generate(
-            system_prompt=SYSTEM_PROMPT,
+        return PreparedRagAnswer(
+            question=request.question,
+            citations=citations,
             user_prompt=user_prompt,
         )
 
-        return RagAnswerResponse(
-            knowledge_base_id=knowledge_base_id,
-            question=request.question,
-            answer=answer,
-            citations=citations,
+    def stream_answer(
+        self,
+        session: Session,
+        knowledge_base_id: UUID,
+        request: RagQuestionRequest,
+    ) -> tuple[list[RagCitation], Iterator[str]]:
+        prepared = self.prepare(
+            session,
+            knowledge_base_id,
+            request,
         )
+
+        if not prepared.citations:
+            return [], iter((NO_CONTEXT_ANSWER,))
+
+        chunks = self.chat_service.stream(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=prepared.user_prompt or "",
+        )
+
+        return prepared.citations, chunks
 
     @staticmethod
     def _build_context(
