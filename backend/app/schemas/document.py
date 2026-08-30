@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from app.database.models import DocumentStatus
+from app.database.models import DocumentParser, DocumentStatus
 
 
 class DocumentResponse(BaseModel):
@@ -18,6 +18,9 @@ class DocumentResponse(BaseModel):
     status: DocumentStatus
     error_message: str | None
     chunk_count: int
+    parser: DocumentParser = DocumentParser.LOCAL
+    external_task_id: str | None = None
+    processing_progress: int = 0
     created_at: datetime
     updated_at: datetime
 

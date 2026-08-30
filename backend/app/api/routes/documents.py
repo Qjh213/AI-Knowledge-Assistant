@@ -22,6 +22,9 @@ from app.services.document import DocumentService
 from app.services.document_processing import (
     DocumentProcessingService,
 )
+from app.services.mineru_processing import (
+    MinerUDocumentProcessingService,
+)
 
 
 router = APIRouter(
@@ -45,6 +48,17 @@ def get_document_processing_service() -> DocumentProcessingService:
 ProcessingServiceDependency = Annotated[
     DocumentProcessingService,
     Depends(get_document_processing_service),
+]
+
+
+def get_mineru_processing_service(
+) -> MinerUDocumentProcessingService:
+    return MinerUDocumentProcessingService()
+
+
+MinerUProcessingServiceDependency = Annotated[
+    MinerUDocumentProcessingService,
+    Depends(get_mineru_processing_service),
 ]
 
 
@@ -122,6 +136,46 @@ def process_document(
     processing_service: ProcessingServiceDependency,
 ) -> DocumentResponse:
     document = processing_service.process(
+        session,
+        knowledge_base_id,
+        document_id,
+    )
+
+    return DocumentResponse.model_validate(document)
+
+
+@router.post(
+    "/{document_id}/process/mineru",
+    response_model=DocumentResponse,
+    summary="Submit a document to MinerU",
+)
+def submit_document_to_mineru(
+    knowledge_base_id: UUID,
+    document_id: UUID,
+    session: SessionDependency,
+    processing_service: MinerUProcessingServiceDependency,
+) -> DocumentResponse:
+    document = processing_service.submit(
+        session,
+        knowledge_base_id,
+        document_id,
+    )
+
+    return DocumentResponse.model_validate(document)
+
+
+@router.post(
+    "/{document_id}/process/mineru/refresh",
+    response_model=DocumentResponse,
+    summary="Refresh and finalize a MinerU task",
+)
+def refresh_mineru_document_processing(
+    knowledge_base_id: UUID,
+    document_id: UUID,
+    session: SessionDependency,
+    processing_service: MinerUProcessingServiceDependency,
+) -> DocumentResponse:
+    document = processing_service.finalize(
         session,
         knowledge_base_id,
         document_id,

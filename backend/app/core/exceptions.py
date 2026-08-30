@@ -93,6 +93,12 @@ class DocumentParseError(Exception):
         )
 
 
+class MinerUServiceError(Exception):
+    def __init__(self, detail: str) -> None:
+        self.detail = detail
+        super().__init__(f"MinerU operation failed: {detail}")
+
+
 class NoExtractableTextError(DocumentParseError):
     def __init__(self, filename: str) -> None:
         super().__init__(

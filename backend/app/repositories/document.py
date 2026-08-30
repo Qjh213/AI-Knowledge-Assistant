@@ -4,7 +4,11 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.database.models import Document, DocumentStatus
+from app.database.models import (
+    Document,
+    DocumentParser,
+    DocumentStatus,
+)
 
 
 class DocumentRepository:
@@ -89,18 +93,37 @@ class DocumentRepository:
 
     @staticmethod
     def update_processing_state(
-        session: Session,
-        document: Document,
-        status: DocumentStatus,
-        *,
-        chunk_count: int | None = None,
-        error_message: str | None = None,
+            session: Session,
+            document: Document,
+            status: DocumentStatus,
+            *,
+            chunk_count: int | None = None,
+            error_message: str | None = None,
+            parser: DocumentParser | None = None,
+            external_task_id: str | None = None,
+            processing_progress: int | None = None,
     ) -> Document:
+        if processing_progress is not None and not (
+                0 <= processing_progress <= 100
+        ):
+            raise ValueError(
+                "Processing progress must be between 0 and 100"
+            )
+
         document.status = status
         document.error_message = error_message
 
         if chunk_count is not None:
             document.chunk_count = chunk_count
+
+        if parser is not None:
+            document.parser = parser
+
+        if external_task_id is not None:
+            document.external_task_id = external_task_id
+
+        if processing_progress is not None:
+            document.processing_progress = processing_progress
 
         session.flush()
         session.refresh(document)
