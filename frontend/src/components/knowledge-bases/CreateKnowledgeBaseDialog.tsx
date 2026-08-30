@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { LoaderCircle, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { createKnowledgeBase } from '../../api/knowledgeBases'
+import { useToast } from '../../lib/toast'
 
 interface CreateKnowledgeBaseDialogProps {
   open: boolean
@@ -13,6 +14,7 @@ export function CreateKnowledgeBaseDialog({
   onClose,
 }: CreateKnowledgeBaseDialogProps) {
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -20,11 +22,21 @@ export function CreateKnowledgeBaseDialog({
   const createMutation = useMutation({
     mutationFn: createKnowledgeBase,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] }),
+      ])
       setName('')
       setDescription('')
       setValidationError(null)
       onClose()
+      showToast('知识库创建成功。')
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error ? error.message : '创建知识库失败。',
+        'error',
+      )
     },
   })
 
