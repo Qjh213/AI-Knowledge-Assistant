@@ -15,6 +15,7 @@ import {
 import { DeleteKnowledgeBaseDialog } from '../components/knowledge-bases/DeleteKnowledgeBaseDialog'
 import { ConversationPanel } from '../components/conversations/ConversationPanel'
 import { DocumentPanel } from '../components/documents/DocumentPanel'
+import { useToast } from '../lib/toast'
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -30,6 +31,7 @@ export function KnowledgeBaseDetailPage() {
   const { knowledgeBaseId } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   const knowledgeBaseQuery = useQuery({
@@ -44,8 +46,18 @@ export function KnowledgeBaseDetailPage() {
       queryClient.removeQueries({
         queryKey: ['knowledge-base', knowledgeBaseId],
       })
-      await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] }),
+      ])
+      showToast('知识库及其关联数据已删除。')
       navigate('/knowledge-bases', { replace: true })
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error ? error.message : '删除知识库失败。',
+        'error',
+      )
     },
   })
 

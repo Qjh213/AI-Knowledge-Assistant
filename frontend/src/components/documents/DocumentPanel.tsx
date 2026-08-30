@@ -17,6 +17,7 @@ import {
   uploadDocument,
 } from '../../api/documents'
 import type { DocumentStatus } from '../../types/document'
+import { useToast } from '../../lib/toast'
 
 interface DocumentPanelProps {
   knowledgeBaseId: string
@@ -56,6 +57,7 @@ function formatBytes(value: number) {
 
 export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
   const queryKey = ['documents', knowledgeBaseId]
 
   const documentsQuery = useQuery({
@@ -69,19 +71,40 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) => uploadDocument(knowledgeBaseId, file),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey })
+      showToast('文档上传成功，请开始处理。')
+    },
+    onError: (error) =>
+      showToast(error instanceof Error ? error.message : '文档上传失败。', 'error'),
   })
 
   const processMutation = useMutation({
     mutationFn: (documentId: string) =>
       processDocument(knowledgeBaseId, documentId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] }),
+      ])
+      showToast('文档处理完成。')
+    },
+    onError: (error) =>
+      showToast(error instanceof Error ? error.message : '文档处理失败。', 'error'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (documentId: string) =>
       deleteDocument(knowledgeBaseId, documentId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] }),
+      ])
+      showToast('文档已删除。')
+    },
+    onError: (error) =>
+      showToast(error instanceof Error ? error.message : '删除文档失败。', 'error'),
   })
 
   const mutationError =

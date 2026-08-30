@@ -9,7 +9,13 @@ import {
   Square,
   User,
 } from 'lucide-react'
-import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   getConversation,
@@ -17,6 +23,7 @@ import {
   streamMessage,
 } from '../api/conversations'
 import { getKnowledgeBase } from '../api/knowledgeBases'
+import { MarkdownMessage } from '../components/conversations/MarkdownMessage'
 import type { Message, RagCitation } from '../types/conversation'
 
 export function ConversationPage() {
@@ -28,6 +35,7 @@ export function ConversationPage() {
   const [streamedAnswer, setStreamedAnswer] = useState('')
   const [streamedCitations, setStreamedCitations] = useState<RagCitation[]>([])
   const abortControllerRef = useRef<AbortController | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   const idsReady = Boolean(knowledgeBaseId && conversationId)
   const knowledgeBaseQuery = useQuery({
@@ -153,9 +161,26 @@ export function ConversationPage() {
     ...(streamingAssistant ? [streamingAssistant] : []),
   ]
 
+  useEffect(() => {
+    if (messagesQuery.isPending) {
+      return
+    }
+
+    messagesEndRef.current?.scrollIntoView({
+      behavior: sendMutation.isPending ? 'auto' : 'smooth',
+      block: 'end',
+    })
+  }, [
+    messages.length,
+    messagesQuery.isPending,
+    sendMutation.isPending,
+    streamedAnswer,
+    streamedUserMessage,
+  ])
+
   return (
     <div className="flex min-h-[calc(100vh-6rem)] flex-col">
-      <header className="flex items-center justify-between gap-4 border-b border-slate-200 pb-5">
+      <header className="sticky top-16 z-10 -mx-5 -mt-8 flex items-center justify-between gap-4 border-b border-slate-200 bg-[#f5f7fb]/95 px-5 py-4 backdrop-blur md:-mx-10 md:-mt-12 md:px-10 md:py-5 lg:top-0">
         <div className="min-w-0">
           <Link
             to={`/knowledge-bases/${knowledgeBaseId}`}
@@ -224,7 +249,11 @@ export function ConversationPage() {
                         : 'rounded-bl-md border border-slate-200 bg-white text-slate-700 shadow-sm'
                     }`}
                   >
-                    {message.content}
+                    {isUser ? (
+                      message.content
+                    ) : (
+                      <MarkdownMessage content={message.content} />
+                    )}
                   </div>
 
                   {!isUser && message.sources && message.sources.length > 0 && (
@@ -273,6 +302,7 @@ export function ConversationPage() {
               </div>
             </div>
           )}
+          <div ref={messagesEndRef} aria-hidden="true" />
         </div>
       </section>
 
