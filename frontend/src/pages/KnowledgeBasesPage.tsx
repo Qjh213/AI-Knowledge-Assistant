@@ -10,6 +10,7 @@ import {
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getKnowledgeBases } from '../api/knowledgeBases'
+import { getDashboardOverview } from '../api/dashboard'
 import { CreateKnowledgeBaseDialog } from '../components/knowledge-bases/CreateKnowledgeBaseDialog'
 
 function formatDate(value: string) {
@@ -26,12 +27,30 @@ export function KnowledgeBasesPage() {
     queryKey: ['knowledge-bases'],
     queryFn: () => getKnowledgeBases(),
   })
+  const overviewQuery = useQuery({
+    queryKey: ['dashboard-overview'],
+    queryFn: getDashboardOverview,
+  })
 
-  const total = knowledgeBasesQuery.data?.total ?? 0
+  const overviewData = overviewQuery.data
   const overview = [
-    { label: '知识库', value: String(total), icon: Database },
-    { label: '已处理文档', value: '—', icon: FileText },
-    { label: '活跃对话', value: '—', icon: Sparkles },
+    {
+      label: '知识库',
+      value: overviewData ? String(overviewData.knowledge_base_count) : '—',
+      icon: Database,
+    },
+    {
+      label: '已处理文档',
+      value: overviewData
+        ? String(overviewData.processed_document_count)
+        : '—',
+      icon: FileText,
+    },
+    {
+      label: '对话总数',
+      value: overviewData ? String(overviewData.conversation_count) : '—',
+      icon: Sparkles,
+    },
   ]
 
   return (
