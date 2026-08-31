@@ -216,6 +216,12 @@ class MinerUDocumentProcessingService:
             document_id,
         )
 
+        # Refresh requests can overlap in browsers. Once indexing has
+        # completed, return the stored result instead of downloading and
+        # indexing the same MinerU archive again.
+        if document.status == DocumentStatus.COMPLETED:
+            return document
+
         if (
             document.parser != DocumentParser.MINERU
             or not document.external_task_id

@@ -1,4 +1,5 @@
 export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'failed'
+export type DocumentParser = 'local' | 'mineru'
 
 export interface Document {
   id: string
@@ -10,6 +11,9 @@ export interface Document {
   status: DocumentStatus
   error_message: string | null
   chunk_count: number
+  parser: DocumentParser
+  external_task_id: string | null
+  processing_progress: number
   created_at: string
   updated_at: string
 }
