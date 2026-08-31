@@ -1,10 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { LoaderCircle, MessageSquarePlus, MessageSquareText } from 'lucide-react'
+import {
+  LoaderCircle,
+  MessageSquarePlus,
+  MessageSquareText,
+  Trash2,
+} from 'lucide-react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   createConversation,
+  deleteConversation,
   getConversations,
 } from '../../api/conversations'
+import type { Conversation } from '../../types/conversation'
+import { useToast } from '../../lib/toast'
+import { DeleteConversationDialog } from './DeleteConversationDialog'
 
 interface ConversationPanelProps {
   knowledgeBaseId: string
@@ -13,6 +23,9 @@ interface ConversationPanelProps {
 export function ConversationPanel({ knowledgeBaseId }: ConversationPanelProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
+  const [conversationToDelete, setConversationToDelete] =
+    useState<Conversation | null>(null)
   const conversationsQuery = useQuery({
     queryKey: ['conversations', knowledgeBaseId],
     queryFn: () => getConversations(knowledgeBaseId),
@@ -26,6 +39,24 @@ export function ConversationPanel({ knowledgeBaseId }: ConversationPanelProps) {
       })
       navigate(
         `/knowledge-bases/${knowledgeBaseId}/conversations/${conversation.id}`,
+      )
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (conversationId: string) =>
+      deleteConversation(knowledgeBaseId, conversationId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['conversations', knowledgeBaseId],
+      })
+      setConversationToDelete(null)
+      showToast('会话已删除。')
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error ? error.message : '删除会话失败。',
+        'error',
       )
     },
   })
@@ -83,22 +114,54 @@ export function ConversationPanel({ knowledgeBaseId }: ConversationPanelProps) {
       {conversationsQuery.isSuccess &&
         conversationsQuery.data.items.length > 0 && (
           <div className="mt-6 grid gap-3 md:grid-cols-2">
-            {conversationsQuery.data.items.map((conversation) => (
-              <Link
-                key={conversation.id}
-                to={`/knowledge-bases/${knowledgeBaseId}/conversations/${conversation.id}`}
-                className="rounded-2xl border border-slate-200 px-4 py-4 transition hover:border-indigo-200 hover:bg-indigo-50/40"
-              >
-                <p className="truncate text-sm font-semibold text-slate-900">
-                  {conversation.title || '新对话'}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">
-                  更新于 {new Date(conversation.updated_at).toLocaleString('zh-CN')}
-                </p>
-              </Link>
-            ))}
+            {conversationsQuery.data.items.map((conversation) => {
+              const title = conversation.title || '新对话'
+              return (
+                <div key={conversation.id} className="flex items-center gap-2 rounded-2xl border border-slate-200 p-2 transition hover:border-indigo-200 hover:bg-indigo-50/40">
+                  <Link
+                    to={`/knowledge-bases/${knowledgeBaseId}/conversations/${conversation.id}`}
+                    className="min-w-0 flex-1 rounded-xl px-2 py-2"
+                  >
+                    <p className="truncate text-sm font-semibold text-slate-900">{title}</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      更新于 {new Date(conversation.updated_at).toLocaleString('zh-CN')}
+                    </p>
+                  </Link>
+                  <button
+                    type="button"
+                    aria-label={`删除会话 ${title}`}
+                    onClick={() => {
+                      deleteMutation.reset()
+                      setConversationToDelete(conversation)
+                    }}
+                    className="grid size-9 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
+
+      <DeleteConversationDialog
+        open={Boolean(conversationToDelete)}
+        conversationTitle={conversationToDelete?.title || '新对话'}
+        isPending={deleteMutation.isPending}
+        errorMessage={
+          deleteMutation.isError
+            ? deleteMutation.error instanceof Error
+              ? deleteMutation.error.message
+              : '删除失败，请稍后重试。'
+            : undefined
+        }
+        onClose={() => {
+          if (!deleteMutation.isPending) setConversationToDelete(null)
+        }}
+        onConfirm={() => {
+          if (conversationToDelete) deleteMutation.mutate(conversationToDelete.id)
+        }}
+      />
     </section>
   )
 }

@@ -3,6 +3,7 @@ import type {
   KnowledgeBase,
   KnowledgeBaseCreate,
   KnowledgeBaseListResponse,
+  KnowledgeBaseUpdate,
 } from '../types/knowledgeBase'
 
 export function getKnowledgeBases(
@@ -30,6 +31,16 @@ export function createKnowledgeBase(
 
 export function getKnowledgeBase(id: string): Promise<KnowledgeBase> {
   return apiRequest<KnowledgeBase>(`/knowledge-bases/${id}`)
+}
+
+export function updateKnowledgeBase(
+  id: string,
+  data: KnowledgeBaseUpdate,
+): Promise<KnowledgeBase> {
+  return apiRequest<KnowledgeBase>(`/knowledge-bases/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
 }
 
 export function deleteKnowledgeBase(id: string): Promise<void> {
