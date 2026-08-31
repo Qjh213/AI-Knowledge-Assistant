@@ -73,7 +73,20 @@ class MinerUClient:
             if enable_formula is None
             else enable_formula
         )
-        self.client = client or httpx.Client(timeout=30.0)
+        if client is None:
+            self.client = httpx.Client(timeout=30.0)
+            # Some Windows proxy stacks terminate TLS unexpectedly when
+            # downloading from MinerU's result CDN. API calls may still
+            # require the configured proxy, so only result downloads bypass
+            # proxy environment variables.
+            self.download_client = httpx.Client(
+                timeout=30.0,
+                follow_redirects=True,
+                trust_env=False,
+            )
+        else:
+            self.client = client
+            self.download_client = client
 
         if not self.api_token:
             raise MinerUServiceError("MINERU_API_TOKEN is not configured")
@@ -188,7 +201,10 @@ class MinerUClient:
 
         archive = bytearray()
         try:
-            with self.client.stream("GET", full_zip_url) as response:
+            with self.download_client.stream(
+                "GET",
+                full_zip_url,
+            ) as response:
                 response.raise_for_status()
                 for chunk in response.iter_bytes():
                     archive.extend(chunk)
