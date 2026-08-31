@@ -101,6 +101,7 @@ class DocumentProcessingService:
             error_message=None,
             processing_progress=100,
         )
+        DocumentRepository.mark_processing_finished(session, document)
 
         session.commit()
         session.refresh(document)
@@ -120,15 +121,16 @@ class DocumentProcessingService:
         )
 
         try:
-            DocumentRepository.update_processing_state(
-                session,
-                document,
-                DocumentStatus.PROCESSING,
-                chunk_count=0,
-                error_message=None,
-                parser=DocumentParser.LOCAL,
-                processing_progress=0,
-            )
+            if not (
+                document.status == DocumentStatus.PROCESSING
+                and document.parser == DocumentParser.LOCAL
+            ):
+                DocumentRepository.mark_processing_started(
+                    session,
+                    document,
+                    DocumentParser.LOCAL,
+                )
+            document.chunk_count = 0
             session.commit()
             session.refresh(document)
 
@@ -171,6 +173,10 @@ class DocumentProcessingService:
                         chunk_count=0,
                         error_message=detail,
                         processing_progress=0,
+                    )
+                    DocumentRepository.mark_processing_finished(
+                        session,
+                        failed_document,
                     )
                     session.commit()
             except Exception:

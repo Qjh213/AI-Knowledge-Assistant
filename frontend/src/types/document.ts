@@ -14,6 +14,9 @@ export interface Document {
   parser: DocumentParser
   external_task_id: string | null
   processing_progress: number
+  processing_attempts: number
+  last_processing_started_at: string | null
+  last_processing_finished_at: string | null
   created_at: string
   updated_at: string
 }

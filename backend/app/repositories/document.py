@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -140,6 +141,33 @@ class DocumentRepository:
         session.flush()
         session.refresh(document)
 
+        return document
+
+    @staticmethod
+    def mark_processing_started(
+        session: Session,
+        document: Document,
+        parser: DocumentParser,
+    ) -> Document:
+        document.status = DocumentStatus.PROCESSING
+        document.parser = parser
+        document.error_message = None
+        document.processing_progress = 0
+        document.processing_attempts += 1
+        document.last_processing_started_at = datetime.now(UTC)
+        document.last_processing_finished_at = None
+        session.flush()
+        session.refresh(document)
+        return document
+
+    @staticmethod
+    def mark_processing_finished(
+        session: Session,
+        document: Document,
+    ) -> Document:
+        document.last_processing_finished_at = datetime.now(UTC)
+        session.flush()
+        session.refresh(document)
         return document
 
     @staticmethod

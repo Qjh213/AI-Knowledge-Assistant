@@ -1,5 +1,7 @@
 from uuid import UUID
 
+from app.database.models import DocumentStatus
+
 
 class KnowledgeBaseNotFoundError(Exception):
     def __init__(self, knowledge_base_id: UUID) -> None:
@@ -135,6 +137,20 @@ class DocumentProcessingError(Exception):
         self.detail = detail
         super().__init__(
             f"Failed to process document '{document_id}': {detail}"
+        )
+
+
+class DocumentRetryNotAllowedError(Exception):
+    def __init__(
+        self,
+        document_id: UUID,
+        status: DocumentStatus,
+    ) -> None:
+        self.document_id = document_id
+        self.status = status
+        super().__init__(
+            f"Document '{document_id}' cannot be retried while its status "
+            f"is '{status.value}'"
         )
 
 

@@ -7,7 +7,7 @@ import {
   getDocuments,
   processDocument,
   processDocumentWithMinerU,
-  refreshMinerUDocument,
+  retryDocumentProcessing,
   uploadDocument,
 } from '../../api/documents'
 import type { Document, DocumentStatus } from '../../types/document'
@@ -20,7 +20,7 @@ vi.mock('../../api/documents', () => ({
   getDocuments: vi.fn(),
   processDocument: vi.fn(),
   processDocumentWithMinerU: vi.fn(),
-  refreshMinerUDocument: vi.fn(),
+  retryDocumentProcessing: vi.fn(),
   uploadDocument: vi.fn(),
 }))
 
@@ -28,7 +28,7 @@ const mockedDeleteDocument = vi.mocked(deleteDocument)
 const mockedGetDocuments = vi.mocked(getDocuments)
 const mockedProcessDocument = vi.mocked(processDocument)
 const mockedProcessDocumentWithMinerU = vi.mocked(processDocumentWithMinerU)
-const mockedRefreshMinerUDocument = vi.mocked(refreshMinerUDocument)
+const mockedRetryDocumentProcessing = vi.mocked(retryDocumentProcessing)
 const mockedUploadDocument = vi.mocked(uploadDocument)
 
 function createDocument(status: DocumentStatus = 'pending'): Document {
@@ -45,6 +45,9 @@ function createDocument(status: DocumentStatus = 'pending'): Document {
     parser: 'local',
     external_task_id: null,
     processing_progress: status === 'completed' ? 100 : 0,
+    processing_attempts: 0,
+    last_processing_started_at: null,
+    last_processing_finished_at: null,
     created_at: '2026-08-31T00:00:00Z',
     updated_at: '2026-08-31T00:00:00Z',
   }
@@ -72,7 +75,7 @@ beforeEach(() => {
   mockedGetDocuments.mockReset()
   mockedProcessDocument.mockReset()
   mockedProcessDocumentWithMinerU.mockReset()
-  mockedRefreshMinerUDocument.mockReset()
+  mockedRetryDocumentProcessing.mockReset()
   mockedUploadDocument.mockReset()
 })
 
@@ -208,7 +211,9 @@ describe('DocumentPanel', () => {
       'knowledge-base-1',
       'document-1',
     )
-    expect(await screen.findByText('文档处理完成。')).toBeInTheDocument()
+    expect(
+      await screen.findByText('文档已加入后台处理队列。'),
+    ).toBeInTheDocument()
   })
 
   it('processes all pending documents locally', async () => {
@@ -315,7 +320,7 @@ describe('DocumentPanel', () => {
     ).toBeInTheDocument()
   })
 
-  it('refreshes a processing MinerU document', async () => {
+  it('polls a processing document until it completes', async () => {
     const processing: Document = {
       ...createDocument('processing'),
       original_filename: 'guide.pdf',
@@ -330,25 +335,59 @@ describe('DocumentPanel', () => {
       processing_progress: 100,
       chunk_count: 3,
     }
-    mockedGetDocuments.mockResolvedValue({
-      items: [processing],
-      total: 1,
-      offset: 0,
-      limit: 100,
-    })
-    mockedRefreshMinerUDocument.mockResolvedValue(completed)
+    mockedGetDocuments
+      .mockResolvedValueOnce({
+        items: [processing],
+        total: 1,
+        offset: 0,
+        limit: 100,
+      })
+      .mockResolvedValue({
+        items: [completed],
+        total: 1,
+        offset: 0,
+        limit: 100,
+      })
 
     renderPanel()
 
     await waitFor(() => {
-      expect(mockedRefreshMinerUDocument).toHaveBeenCalledWith(
-        'knowledge-base-1',
-        'document-1',
-      )
+      expect(mockedGetDocuments.mock.calls.length).toBeGreaterThanOrEqual(2)
     }, { timeout: 4_000 })
     expect(await screen.findByText('处理完成')).toBeInTheDocument()
     expect(screen.getByText('100%')).toBeInTheDocument()
     expect(screen.getByText('3 个分块')).toBeInTheDocument()
+  })
+
+  it('retries a failed document', async () => {
+    const user = userEvent.setup()
+    const failed = {
+      ...createDocument('failed'),
+      error_message: 'temporary failure',
+      processing_attempts: 1,
+    }
+    mockedGetDocuments.mockResolvedValue({
+      items: [failed],
+      total: 1,
+      offset: 0,
+      limit: 100,
+    })
+    mockedRetryDocumentProcessing.mockResolvedValue({
+      ...failed,
+      status: 'processing',
+      processing_attempts: 2,
+    })
+
+    renderPanel()
+    await user.click(await screen.findByRole('button', { name: '重试' }))
+
+    expect(mockedRetryDocumentProcessing).toHaveBeenCalledWith(
+      'knowledge-base-1',
+      'document-1',
+    )
+    expect(
+      await screen.findByText('失败任务已重新加入后台队列。'),
+    ).toBeInTheDocument()
   })
 
   it('deletes a document after confirmation', async () => {

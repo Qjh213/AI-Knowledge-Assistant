@@ -25,6 +25,11 @@ from app.services.document_processing import (
 from app.services.mineru_processing import (
     MinerUDocumentProcessingService,
 )
+from app.database.models import DocumentParser
+from app.services.background_processing import (
+    BackgroundDocumentProcessor,
+    background_document_processor,
+)
 
 
 router = APIRouter(
@@ -59,6 +64,16 @@ def get_mineru_processing_service(
 MinerUProcessingServiceDependency = Annotated[
     MinerUDocumentProcessingService,
     Depends(get_mineru_processing_service),
+]
+
+
+def get_background_document_processor() -> BackgroundDocumentProcessor:
+    return background_document_processor
+
+
+BackgroundProcessorDependency = Annotated[
+    BackgroundDocumentProcessor,
+    Depends(get_background_document_processor),
 ]
 
 
@@ -141,6 +156,50 @@ def process_document(
         document_id,
     )
 
+    return DocumentResponse.model_validate(document)
+
+
+@router.post(
+    "/{document_id}/process/background",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Queue document processing in the background",
+)
+def queue_document_processing(
+    knowledge_base_id: UUID,
+    document_id: UUID,
+    session: SessionDependency,
+    background_processor: BackgroundProcessorDependency,
+    parser: DocumentParser = DocumentParser.LOCAL,
+) -> DocumentResponse:
+    document = background_processor.enqueue(
+        session,
+        knowledge_base_id,
+        document_id,
+        parser,
+    )
+    return DocumentResponse.model_validate(document)
+
+
+@router.post(
+    "/{document_id}/process/retry",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Retry failed document processing in the background",
+)
+def retry_document_processing(
+    knowledge_base_id: UUID,
+    document_id: UUID,
+    session: SessionDependency,
+    background_processor: BackgroundProcessorDependency,
+) -> DocumentResponse:
+    document = background_processor.enqueue(
+        session,
+        knowledge_base_id,
+        document_id,
+        None,
+        retry_only=True,
+    )
     return DocumentResponse.model_validate(document)
 
 
