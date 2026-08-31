@@ -579,3 +579,36 @@ def test_finalize_does_not_index_running_task(
     assert document.status == DocumentStatus.PROCESSING
     assert document.processing_progress == 60
     assert processing_service.calls == []
+
+
+def test_finalize_returns_already_completed_document(
+    tmp_path: Path,
+) -> None:
+    document = make_submitted_document()
+    document.status = DocumentStatus.COMPLETED
+    document.processing_progress = 100
+    processing_service = FakeProcessingService()
+    mineru_client = FakeMinerUStatusClient(
+        MinerUTaskResult(
+            batch_id="batch-123",
+            file_name="lesson.pdf",
+            state="done",
+            progress=100,
+            full_zip_url="https://download.example/result.zip",
+        )
+    )
+
+    result = MinerUDocumentProcessingService(
+        mineru_client=mineru_client,
+        document_service=FakeDocumentService(document),
+        storage_service=DocumentStorageService(storage_path=tmp_path),
+        processing_service=processing_service,
+    ).finalize(
+        FakeSession(),
+        document.knowledge_base_id,
+        document.id,
+    )
+
+    assert result is document
+    assert mineru_client.calls == []
+    assert processing_service.calls == []

@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -8,15 +9,18 @@ import {
   LoaderCircle,
   Play,
   RefreshCw,
+  Sparkles,
   Trash2,
 } from 'lucide-react'
 import {
   deleteDocument,
   getDocuments,
   processDocument,
+  processDocumentWithMinerU,
+  refreshMinerUDocument,
   uploadDocument,
 } from '../../api/documents'
-import type { DocumentStatus } from '../../types/document'
+import type { DocumentListResponse, DocumentStatus } from '../../types/document'
 import { useToast } from '../../lib/toast'
 
 interface DocumentPanelProps {
@@ -58,16 +62,71 @@ function formatBytes(value: number) {
 export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
-  const queryKey = ['documents', knowledgeBaseId]
+  const queryKey = useMemo(
+    () => ['documents', knowledgeBaseId] as const,
+    [knowledgeBaseId],
+  )
+  const refreshInFlight = useRef(false)
 
   const documentsQuery = useQuery({
     queryKey,
     queryFn: () => getDocuments(knowledgeBaseId),
-    refetchInterval: (query) =>
-      query.state.data?.items.some((item) => item.status === 'processing')
-        ? 2_000
-        : false,
   })
+
+  useEffect(() => {
+    const processingDocuments = documentsQuery.data?.items.filter(
+      (item) => item.status === 'processing' && item.parser === 'mineru',
+    )
+
+    if (!processingDocuments?.length) return
+
+    let cancelled = false
+    const timeoutId = window.setTimeout(async () => {
+      if (refreshInFlight.current) return
+      refreshInFlight.current = true
+
+      try {
+        const refreshed = await Promise.allSettled(
+          processingDocuments.map((item) =>
+            refreshMinerUDocument(knowledgeBaseId, item.id),
+          ),
+        )
+        if (cancelled) return
+
+        const refreshedById = new Map(
+          refreshed.flatMap((result, index) =>
+            result.status === 'fulfilled'
+              ? [[processingDocuments[index].id, result.value] as const]
+              : [],
+          ),
+        )
+
+        if (refreshedById.size > 0) {
+          queryClient.setQueryData<DocumentListResponse>(queryKey, (current) =>
+            current
+              ? {
+                  ...current,
+                  items: current.items.map(
+                    (item) => refreshedById.get(item.id) ?? item,
+                  ),
+                }
+              : current,
+          )
+        }
+
+        if (refreshed.some((result) => result.status === 'rejected')) {
+          await queryClient.invalidateQueries({ queryKey })
+        }
+      } finally {
+        refreshInFlight.current = false
+      }
+    }, 3_000)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [documentsQuery.data, knowledgeBaseId, queryClient, queryKey])
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) => uploadDocument(knowledgeBaseId, file),
@@ -93,6 +152,20 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
       showToast(error instanceof Error ? error.message : '文档处理失败。', 'error'),
   })
 
+  const mineruMutation = useMutation({
+    mutationFn: (documentId: string) =>
+      processDocumentWithMinerU(knowledgeBaseId, documentId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey })
+      showToast('文档已提交 MinerU，正在解析。')
+    },
+    onError: (error) =>
+      showToast(
+        error instanceof Error ? error.message : 'MinerU 任务提交失败。',
+        'error',
+      ),
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (documentId: string) =>
       deleteDocument(knowledgeBaseId, documentId),
@@ -108,7 +181,10 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
   })
 
   const mutationError =
-    uploadMutation.error ?? processMutation.error ?? deleteMutation.error
+    uploadMutation.error ??
+    processMutation.error ??
+    mineruMutation.error ??
+    deleteMutation.error
 
   return (
     <section className="mt-10 rounded-3xl border border-slate-200 bg-white shadow-sm shadow-slate-200/40">
@@ -194,11 +270,19 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
           {documentsQuery.data.items.map((document) => {
             const meta = statusMeta[document.status]
             const StatusIcon = meta.icon
-            const isProcessingThis =
+            const isLocalProcessingThis =
               processMutation.isPending &&
               processMutation.variables === document.id
+            const isMineruProcessingThis =
+              mineruMutation.isPending &&
+              mineruMutation.variables === document.id
             const isDeletingThis =
               deleteMutation.isPending && deleteMutation.variables === document.id
+            const canUseMinerU = /\.(pdf|docx)$/i.test(document.original_filename)
+            const operationsPending =
+              processMutation.isPending ||
+              mineruMutation.isPending ||
+              deleteMutation.isPending
 
             return (
               <div
@@ -231,25 +315,60 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
                       {document.error_message}
                     </p>
                   )}
+                  {document.parser === 'mineru' && (
+                    <div className="mt-2 max-w-md">
+                      <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
+                        <span>MinerU 解析</span>
+                        <span>{document.processing_progress}%</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full bg-sky-500 transition-[width] duration-500"
+                          style={{
+                            width: `${Math.max(
+                              0,
+                              Math.min(100, document.processing_progress),
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 md:justify-end">
                   {(document.status === 'pending' || document.status === 'failed') && (
-                    <button
-                      disabled={processMutation.isPending || deleteMutation.isPending}
-                      onClick={() => processMutation.mutate(document.id)}
-                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
-                    >
-                      {isProcessingThis ? (
-                        <LoaderCircle size={15} className="animate-spin" />
-                      ) : (
-                        <Play size={15} />
+                    <>
+                      <button
+                        disabled={operationsPending}
+                        onClick={() => processMutation.mutate(document.id)}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                      >
+                        {isLocalProcessingThis ? (
+                          <LoaderCircle size={15} className="animate-spin" />
+                        ) : (
+                          <Play size={15} />
+                        )}
+                        本地处理
+                      </button>
+                      {canUseMinerU && (
+                        <button
+                          disabled={operationsPending}
+                          onClick={() => mineruMutation.mutate(document.id)}
+                          className="inline-flex h-9 items-center gap-2 rounded-xl bg-sky-50 px-3 text-xs font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+                        >
+                          {isMineruProcessingThis ? (
+                            <LoaderCircle size={15} className="animate-spin" />
+                          ) : (
+                            <Sparkles size={15} />
+                          )}
+                          MinerU 解析
+                        </button>
                       )}
-                      {isProcessingThis ? '处理中' : '开始处理'}
-                    </button>
+                    </>
                   )}
                   <button
                     aria-label={`删除 ${document.original_filename}`}
-                    disabled={processMutation.isPending || deleteMutation.isPending}
+                    disabled={operationsPending}
                     onClick={() => {
                       if (window.confirm(`确定删除“${document.original_filename}”吗？`)) {
                         deleteMutation.mutate(document.id)

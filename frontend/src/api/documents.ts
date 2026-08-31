@@ -43,6 +43,26 @@ export function processDocument(
   )
 }
 
+export function processDocumentWithMinerU(
+  knowledgeBaseId: string,
+  documentId: string,
+): Promise<Document> {
+  return apiRequest<Document>(
+    `${documentBasePath(knowledgeBaseId)}/${documentId}/process/mineru`,
+    { method: 'POST' },
+  )
+}
+
+export function refreshMinerUDocument(
+  knowledgeBaseId: string,
+  documentId: string,
+): Promise<Document> {
+  return apiRequest<Document>(
+    `${documentBasePath(knowledgeBaseId)}/${documentId}/process/mineru/refresh`,
+    { method: 'POST' },
+  )
+}
+
 export function deleteDocument(
   knowledgeBaseId: string,
   documentId: string,

@@ -6,6 +6,8 @@ import {
   deleteDocument,
   getDocuments,
   processDocument,
+  processDocumentWithMinerU,
+  refreshMinerUDocument,
   uploadDocument,
 } from '../../api/documents'
 import type { Document, DocumentStatus } from '../../types/document'
@@ -17,12 +19,16 @@ vi.mock('../../api/documents', () => ({
   deleteDocument: vi.fn(),
   getDocuments: vi.fn(),
   processDocument: vi.fn(),
+  processDocumentWithMinerU: vi.fn(),
+  refreshMinerUDocument: vi.fn(),
   uploadDocument: vi.fn(),
 }))
 
 const mockedDeleteDocument = vi.mocked(deleteDocument)
 const mockedGetDocuments = vi.mocked(getDocuments)
 const mockedProcessDocument = vi.mocked(processDocument)
+const mockedProcessDocumentWithMinerU = vi.mocked(processDocumentWithMinerU)
+const mockedRefreshMinerUDocument = vi.mocked(refreshMinerUDocument)
 const mockedUploadDocument = vi.mocked(uploadDocument)
 
 function createDocument(status: DocumentStatus = 'pending'): Document {
@@ -36,6 +42,9 @@ function createDocument(status: DocumentStatus = 'pending'): Document {
     status,
     error_message: null,
     chunk_count: status === 'completed' ? 4 : 0,
+    parser: 'local',
+    external_task_id: null,
+    processing_progress: status === 'completed' ? 100 : 0,
     created_at: '2026-08-31T00:00:00Z',
     updated_at: '2026-08-31T00:00:00Z',
   }
@@ -62,6 +71,8 @@ beforeEach(() => {
   mockedDeleteDocument.mockReset()
   mockedGetDocuments.mockReset()
   mockedProcessDocument.mockReset()
+  mockedProcessDocumentWithMinerU.mockReset()
+  mockedRefreshMinerUDocument.mockReset()
   mockedUploadDocument.mockReset()
 })
 
@@ -119,13 +130,81 @@ describe('DocumentPanel', () => {
     mockedProcessDocument.mockResolvedValue(createDocument('completed'))
     renderPanel()
 
-    await user.click(await screen.findByRole('button', { name: '开始处理' }))
+    await user.click(await screen.findByRole('button', { name: '本地处理' }))
 
     expect(mockedProcessDocument).toHaveBeenCalledWith(
       'knowledge-base-1',
       'document-1',
     )
     expect(await screen.findByText('文档处理完成。')).toBeInTheDocument()
+  })
+
+  it('submits a PDF document to MinerU', async () => {
+    const user = userEvent.setup()
+    const pending = {
+      ...createDocument('pending'),
+      original_filename: 'guide.pdf',
+      mime_type: 'application/pdf',
+    }
+    mockedGetDocuments.mockResolvedValue({
+      items: [pending],
+      total: 1,
+      offset: 0,
+      limit: 100,
+    })
+    mockedProcessDocumentWithMinerU.mockResolvedValue({
+      ...pending,
+      status: 'processing',
+      parser: 'mineru',
+      external_task_id: 'batch-123',
+    })
+    renderPanel()
+
+    await user.click(await screen.findByRole('button', { name: 'MinerU 解析' }))
+
+    expect(mockedProcessDocumentWithMinerU).toHaveBeenCalledWith(
+      'knowledge-base-1',
+      'document-1',
+    )
+    expect(
+      await screen.findByText('文档已提交 MinerU，正在解析。'),
+    ).toBeInTheDocument()
+  })
+
+  it('refreshes a processing MinerU document', async () => {
+    const processing: Document = {
+      ...createDocument('processing'),
+      original_filename: 'guide.pdf',
+      mime_type: 'application/pdf',
+      parser: 'mineru',
+      external_task_id: 'batch-123',
+      processing_progress: 45,
+    }
+    const completed: Document = {
+      ...processing,
+      status: 'completed',
+      processing_progress: 100,
+      chunk_count: 3,
+    }
+    mockedGetDocuments.mockResolvedValue({
+      items: [processing],
+      total: 1,
+      offset: 0,
+      limit: 100,
+    })
+    mockedRefreshMinerUDocument.mockResolvedValue(completed)
+
+    renderPanel()
+
+    await waitFor(() => {
+      expect(mockedRefreshMinerUDocument).toHaveBeenCalledWith(
+        'knowledge-base-1',
+        'document-1',
+      )
+    }, { timeout: 4_000 })
+    expect(await screen.findByText('处理完成')).toBeInTheDocument()
+    expect(screen.getByText('100%')).toBeInTheDocument()
+    expect(screen.getByText('3 个分块')).toBeInTheDocument()
   })
 
   it('deletes a document after confirmation', async () => {
