@@ -91,7 +91,7 @@ describe('DocumentPanel', () => {
     renderPanel()
 
     expect(await screen.findByText('批量上传与处理规则')).toBeInTheDocument()
-    expect(screen.getByText(/每个文件最大 20 MB/)).toBeInTheDocument()
+    expect(screen.getByText(/每个文件最大 100 MB/)).toBeInTheDocument()
     expect(screen.getByText(/上传最多同时进行 3 个/)).toBeInTheDocument()
     expect(screen.getByText(/本地处理最多同时进行 2 个/)).toBeInTheDocument()
     expect(screen.getByText(/MinerU 仅处理 PDF/)).toBeInTheDocument()

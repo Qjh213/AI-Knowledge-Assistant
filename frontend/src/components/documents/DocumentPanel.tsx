@@ -379,7 +379,7 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
         <div>
           <p className="font-semibold">批量上传与处理规则</p>
           <p className="mt-0.5 text-sky-700">
-            可一次选择多个 TXT、Markdown、PDF 或 DOCX 文件，每个文件最大 20 MB；
+            可一次选择多个 TXT、Markdown、PDF 或 DOCX 文件，每个文件最大 100 MB；
             上传最多同时进行 3 个。本地处理最多同时进行 2 个；MinerU 仅处理 PDF
             和 DOCX，最多同时提交 3 个。其余文件会自动排队，不限制本次选择总数。
           </p>
@@ -424,7 +424,7 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
           <FileText size={30} className="mx-auto text-slate-300" />
           <p className="mt-4 text-sm font-medium text-slate-700">还没有文档</p>
           <p className="mt-1 text-xs text-slate-400">
-            支持 TXT、Markdown、PDF 和 DOCX，单个文件最大 20 MB。
+            支持 TXT、Markdown、PDF 和 DOCX，单个文件最大 100 MB。
           </p>
         </div>
       )}

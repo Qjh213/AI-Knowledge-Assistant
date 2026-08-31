@@ -52,7 +52,9 @@ class MinerUClient:
         enable_formula: bool | None = None,
     ) -> None:
         self.api_token = (
-            settings.mineru_api_token if api_token is None else api_token
+            settings.secret_value(settings.mineru_api_token)
+            if api_token is None
+            else api_token
         ).strip()
         self.base_url = (
             settings.mineru_base_url if base_url is None else base_url

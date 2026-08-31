@@ -31,7 +31,7 @@ class VectorStoreService:
     ) -> None:
         self.client = client or MilvusClient(
             uri=settings.milvus_uri,
-            token=settings.milvus_token or None,
+            token=settings.secret_value(settings.milvus_token) or None,
         )
         self.collection_name = (
             collection_name or settings.milvus_collection_name
