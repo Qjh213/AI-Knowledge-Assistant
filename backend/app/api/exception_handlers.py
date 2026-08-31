@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
@@ -15,6 +17,16 @@ from app.core.exceptions import (
     ChatServiceError,
     ConversationNotFoundError,
 )
+from app.core.config import settings
+
+
+logger = logging.getLogger("app.errors")
+
+
+def service_error_detail(exc: Exception, fallback: str) -> str:
+    if settings.is_production or not settings.expose_error_details:
+        return fallback
+    return str(exc)
 
 
 async def knowledge_base_not_found_handler(
@@ -127,7 +139,10 @@ async def document_processing_handler(
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
-            "detail": str(exc),
+            "detail": service_error_detail(
+                exc,
+                "Document processing failed. Please retry later.",
+            ),
             "code": "document_processing_failed",
         },
     )
@@ -153,7 +168,10 @@ async def retrieval_service_handler(
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content={
-            "detail": str(exc),
+            "detail": service_error_detail(
+                exc,
+                "Retrieval service is temporarily unavailable.",
+            ),
             "code": "retrieval_service_unavailable",
         },
     )
@@ -166,8 +184,31 @@ async def chat_service_handler(
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content={
-            "detail": str(exc),
+            "detail": service_error_detail(
+                exc,
+                "Chat service is temporarily unavailable.",
+            ),
             "code": "chat_service_unavailable",
+        },
+    )
+
+
+async def unhandled_exception_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", "unknown")
+    logger.exception(
+        "Unhandled application exception",
+        exc_info=exc,
+        extra={"request_id": request_id},
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "Internal server error.",
+            "code": "internal_server_error",
+            "request_id": request_id,
         },
     )
 
@@ -220,4 +261,8 @@ def register_exception_handlers(application: FastAPI) -> None:
     application.add_exception_handler(
         ChatServiceError,
         chat_service_handler,
+    )
+    application.add_exception_handler(
+        Exception,
+        unhandled_exception_handler,
     )

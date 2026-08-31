@@ -23,7 +23,7 @@ class EmbeddingService:
         batch_size: int | None = None,
     ) -> None:
         self.client = client or OpenAI(
-            api_key=settings.siliconflow_api_key,
+            api_key=settings.secret_value(settings.siliconflow_api_key),
             base_url=settings.siliconflow_base_url,
         )
         self.model = model or settings.embedding_model

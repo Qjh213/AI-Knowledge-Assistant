@@ -15,13 +15,14 @@ class ChatService:
         max_tokens: int | None = None,
     ) -> None:
         if client is None:
-            if not settings.deepseek_api_key:
+            api_key = settings.secret_value(settings.deepseek_api_key)
+            if not api_key:
                 raise ChatServiceError(
                     "DeepSeek API key is not configured"
                 )
 
             client = OpenAI(
-                api_key=settings.deepseek_api_key,
+                api_key=api_key,
                 base_url=settings.deepseek_base_url,
             )
 
