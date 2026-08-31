@@ -18,10 +18,10 @@ import {
   getDocuments,
   processDocument,
   processDocumentWithMinerU,
-  refreshMinerUDocument,
+  retryDocumentProcessing,
   uploadDocument,
 } from '../../api/documents'
-import type { DocumentListResponse, DocumentStatus } from '../../types/document'
+import type { DocumentStatus } from '../../types/document'
 import { useToast } from '../../lib/toast'
 
 interface DocumentPanelProps {
@@ -157,7 +157,7 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
 
   useEffect(() => {
     const processingDocuments = documentsQuery.data?.items.filter(
-      (item) => item.status === 'processing' && item.parser === 'mineru',
+      (item) => item.status === 'processing',
     )
 
     if (!processingDocuments?.length) return
@@ -168,37 +168,8 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
       refreshInFlight.current = true
 
       try {
-        const refreshed = await Promise.allSettled(
-          processingDocuments.map((item) =>
-            refreshMinerUDocument(knowledgeBaseId, item.id),
-          ),
-        )
         if (cancelled) return
-
-        const refreshedById = new Map(
-          refreshed.flatMap((result, index) =>
-            result.status === 'fulfilled'
-              ? [[processingDocuments[index].id, result.value] as const]
-              : [],
-          ),
-        )
-
-        if (refreshedById.size > 0) {
-          queryClient.setQueryData<DocumentListResponse>(queryKey, (current) =>
-            current
-              ? {
-                  ...current,
-                  items: current.items.map(
-                    (item) => refreshedById.get(item.id) ?? item,
-                  ),
-                }
-              : current,
-          )
-        }
-
-        if (refreshed.some((result) => result.status === 'rejected')) {
-          await queryClient.invalidateQueries({ queryKey })
-        }
+        await queryClient.invalidateQueries({ queryKey })
       } finally {
         refreshInFlight.current = false
       }
@@ -238,7 +209,7 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
         queryClient.invalidateQueries({ queryKey }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] }),
       ])
-      showToast('文档处理完成。')
+      showToast('文档已加入后台处理队列。')
     },
     onError: (error) =>
       showToast(error instanceof Error ? error.message : '文档处理失败。', 'error'),
@@ -256,6 +227,17 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
         error instanceof Error ? error.message : 'MinerU 任务提交失败。',
         'error',
       ),
+  })
+
+  const retryMutation = useMutation({
+    mutationFn: (documentId: string) =>
+      retryDocumentProcessing(knowledgeBaseId, documentId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey })
+      showToast('失败任务已重新加入后台队列。')
+    },
+    onError: (error) =>
+      showToast(error instanceof Error ? error.message : '重试失败。', 'error'),
   })
 
   const batchProcessMutation = useMutation({
@@ -300,6 +282,7 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
     uploadMutation.error ??
     processMutation.error ??
     mineruMutation.error ??
+    retryMutation.error ??
     batchProcessMutation.error ??
     deleteMutation.error
 
@@ -314,6 +297,7 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
     uploadMutation.isPending ||
     processMutation.isPending ||
     mineruMutation.isPending ||
+    retryMutation.isPending ||
     batchProcessMutation.isPending ||
     deleteMutation.isPending
 
@@ -478,6 +462,12 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
                     <span>{formatBytes(document.file_size)}</span>
                     <span>·</span>
                     <span>{document.chunk_count} 个分块</span>
+                    {document.processing_attempts > 0 && (
+                      <>
+                        <span>·</span>
+                        <span>已尝试 {document.processing_attempts} 次</span>
+                      </>
+                    )}
                     <span
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium ${meta.className}`}
                     >
@@ -514,7 +504,7 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
                   )}
                 </div>
                 <div className="flex items-center gap-2 md:justify-end">
-                  {(document.status === 'pending' || document.status === 'failed') && (
+                  {document.status === 'pending' && (
                     <>
                       <button
                         disabled={operationsPending}
@@ -543,6 +533,21 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
                         </button>
                       )}
                     </>
+                  )}
+                  {document.status === 'failed' && (
+                    <button
+                      disabled={operationsPending}
+                      onClick={() => retryMutation.mutate(document.id)}
+                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-amber-50 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                    >
+                      {retryMutation.isPending &&
+                      retryMutation.variables === document.id ? (
+                        <LoaderCircle size={15} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={15} />
+                      )}
+                      重试
+                    </button>
                   )}
                   <button
                     aria-label={`删除 ${document.original_filename}`}

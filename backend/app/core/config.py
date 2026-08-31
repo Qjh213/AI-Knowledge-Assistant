@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     mineru_enable_formula: bool = True
     mineru_poll_interval_seconds: float = Field(default=3.0, gt=0)
     mineru_timeout_seconds: int = Field(default=600, ge=30, le=3600)
+    background_worker_count: int = Field(default=3, ge=1, le=16)
 
     @property
     def max_upload_size_bytes(self) -> int:

@@ -21,6 +21,9 @@ class DocumentResponse(BaseModel):
     parser: DocumentParser = DocumentParser.LOCAL
     external_task_id: str | None = None
     processing_progress: int = 0
+    processing_attempts: int = 0
+    last_processing_started_at: datetime | None = None
+    last_processing_finished_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

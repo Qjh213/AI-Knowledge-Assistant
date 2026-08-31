@@ -5,6 +5,7 @@ from app.core.exceptions import (
     DocumentAlreadyExistsError,
     DocumentNotFoundError,
     DocumentProcessingError,
+    DocumentRetryNotAllowedError,
     DocumentTooLargeError,
     EmptyDocumentError,
     KnowledgeBaseAlreadyExistsError,
@@ -132,6 +133,19 @@ async def document_processing_handler(
     )
 
 
+async def document_retry_not_allowed_handler(
+    request: Request,
+    exc: DocumentRetryNotAllowedError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "detail": str(exc),
+            "code": "document_retry_not_allowed",
+        },
+    )
+
+
 async def retrieval_service_handler(
     request: Request,
     exc: RetrievalServiceError,
@@ -194,6 +208,10 @@ def register_exception_handlers(application: FastAPI) -> None:
     application.add_exception_handler(
         DocumentProcessingError,
         document_processing_handler,
+    )
+    application.add_exception_handler(
+        DocumentRetryNotAllowedError,
+        document_retry_not_allowed_handler,
     )
     application.add_exception_handler(
         RetrievalServiceError,

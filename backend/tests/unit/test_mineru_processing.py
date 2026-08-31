@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
@@ -181,6 +182,9 @@ def make_document() -> SimpleNamespace:
         processing_progress=0,
         chunk_count=0,
         error_message=None,
+        processing_attempts=0,
+        last_processing_started_at=None,
+        last_processing_finished_at=None,
     )
 
 
@@ -205,6 +209,36 @@ def patch_repository_updates(
         DocumentRepository,
         "update_processing_state",
         update_processing_state,
+    )
+
+    def mark_processing_started(
+        session: object,
+        document: SimpleNamespace,
+        parser: DocumentParser,
+    ) -> SimpleNamespace:
+        document.status = DocumentStatus.PROCESSING
+        document.parser = parser
+        document.processing_attempts += 1
+        document.last_processing_started_at = datetime.now(UTC)
+        document.last_processing_finished_at = None
+        return document
+
+    def mark_processing_finished(
+        session: object,
+        document: SimpleNamespace,
+    ) -> SimpleNamespace:
+        document.last_processing_finished_at = datetime.now(UTC)
+        return document
+
+    monkeypatch.setattr(
+        DocumentRepository,
+        "mark_processing_started",
+        mark_processing_started,
+    )
+    monkeypatch.setattr(
+        DocumentRepository,
+        "mark_processing_finished",
+        mark_processing_finished,
     )
 
 

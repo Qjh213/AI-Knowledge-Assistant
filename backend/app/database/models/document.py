@@ -1,10 +1,12 @@
 from enum import Enum
+from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    DateTime,
     Enum as SqlEnum,
     ForeignKey,
     Index,
@@ -47,6 +49,10 @@ class Document(TimestampMixin, Base):
         CheckConstraint(
             "processing_progress >= 0 AND processing_progress <= 100",
             name="processing_progress_range",
+        ),
+        CheckConstraint(
+            "processing_attempts >= 0",
+            name="processing_attempts_non_negative",
         ),
     )
 
@@ -125,6 +131,19 @@ class Document(TimestampMixin, Base):
         Integer,
         default=0,
         nullable=False,
+    )
+    processing_attempts: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+    last_processing_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_processing_finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     knowledge_base: Mapped["KnowledgeBase"] = relationship(

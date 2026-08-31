@@ -72,6 +72,16 @@ class MinerUDocumentProcessingService:
             return document
 
         try:
+            if not (
+                document.status == DocumentStatus.PROCESSING
+                and document.parser == DocumentParser.MINERU
+            ):
+                DocumentRepository.mark_processing_started(
+                    session,
+                    document,
+                    DocumentParser.MINERU,
+                )
+
             file_path = self._resolve_file_path(
                 document.file_path
             )
@@ -123,6 +133,10 @@ class MinerUDocumentProcessingService:
                         parser=DocumentParser.MINERU,
                         processing_progress=0,
                     )
+                    DocumentRepository.mark_processing_finished(
+                        session,
+                        failed_document,
+                    )
                     session.commit()
             except Exception:
                 session.rollback()
@@ -173,6 +187,10 @@ class MinerUDocumentProcessingService:
                     ),
                     parser=DocumentParser.MINERU,
                     processing_progress=0,
+                )
+                DocumentRepository.mark_processing_finished(
+                    session,
+                    document,
                 )
             else:
                 # 即使 MinerU 已经解析完成，在完成文本切分、
@@ -331,6 +349,10 @@ class MinerUDocumentProcessingService:
                         error_message=str(exc),
                         parser=DocumentParser.MINERU,
                         processing_progress=0,
+                    )
+                    DocumentRepository.mark_processing_finished(
+                        session,
+                        failed_document,
                     )
                     session.commit()
             except Exception:

@@ -38,7 +38,7 @@ export function processDocument(
   documentId: string,
 ): Promise<Document> {
   return apiRequest<Document>(
-    `${documentBasePath(knowledgeBaseId)}/${documentId}/process`,
+    `${documentBasePath(knowledgeBaseId)}/${documentId}/process/background?parser=local`,
     { method: 'POST' },
   )
 }
@@ -48,7 +48,17 @@ export function processDocumentWithMinerU(
   documentId: string,
 ): Promise<Document> {
   return apiRequest<Document>(
-    `${documentBasePath(knowledgeBaseId)}/${documentId}/process/mineru`,
+    `${documentBasePath(knowledgeBaseId)}/${documentId}/process/background?parser=mineru`,
+    { method: 'POST' },
+  )
+}
+
+export function retryDocumentProcessing(
+  knowledgeBaseId: string,
+  documentId: string,
+): Promise<Document> {
+  return apiRequest<Document>(
+    `${documentBasePath(knowledgeBaseId)}/${documentId}/process/retry`,
     { method: 'POST' },
   )
 }
