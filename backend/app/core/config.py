@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     )
 
     document_storage_path: Path = PROJECT_ROOT / "data" / "documents"
-    max_upload_size_mb: int = 20
+    max_upload_size_mb: int = Field(default=100, ge=1, le=1024)
     allowed_document_extensions: tuple[str, ...] = (
         ".txt",
         ".md",
