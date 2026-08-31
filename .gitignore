@@ -13,6 +13,7 @@ venv.old/
 # Environment variables
 .env
 backend/.env
+docker/.env
 
 # IDE and OS
 .vscode/
