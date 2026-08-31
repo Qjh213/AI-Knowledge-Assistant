@@ -11,6 +11,7 @@ from app.schemas.rag import (
 )
 from app.schemas.retrieval import RetrievalRequest
 from app.services.chat import ChatService
+from app.services.knowledge_base_metadata import KnowledgeBaseMetadataService
 from app.services.retrieval import RetrievalService
 
 
@@ -36,6 +37,7 @@ class PreparedRagAnswer:
     question: str
     citations: list[RagCitation]
     user_prompt: str | None
+    direct_answer: str | None = None
 
 
 class RagService:
@@ -43,12 +45,16 @@ class RagService:
         self,
         retrieval_service: RetrievalService | None = None,
         chat_service: ChatService | None = None,
+        metadata_service: KnowledgeBaseMetadataService | None = None,
     ) -> None:
         self.retrieval_service = (
             retrieval_service or RetrievalService()
         )
         self.chat_service = (
             chat_service or ChatService()
+        )
+        self.metadata_service = (
+            metadata_service or KnowledgeBaseMetadataService()
         )
 
     def answer(
@@ -63,7 +69,9 @@ class RagService:
             request,
         )
 
-        if not prepared.citations:
+        if prepared.direct_answer is not None:
+            answer = prepared.direct_answer
+        elif not prepared.citations:
             answer = NO_CONTEXT_ANSWER
         else:
             answer = self.chat_service.generate(
@@ -84,6 +92,19 @@ class RagService:
         knowledge_base_id: UUID,
         request: RagQuestionRequest,
     ) -> PreparedRagAnswer:
+        direct_answer = self.metadata_service.answer(
+            session,
+            knowledge_base_id,
+            request.question,
+        )
+        if direct_answer is not None:
+            return PreparedRagAnswer(
+                question=request.question,
+                citations=[],
+                user_prompt=None,
+                direct_answer=direct_answer,
+            )
+
         retrieval_response = self.retrieval_service.search(
             session,
             knowledge_base_id,
@@ -140,6 +161,9 @@ class RagService:
             knowledge_base_id,
             request,
         )
+
+        if prepared.direct_answer is not None:
+            return [], iter((prepared.direct_answer,))
 
         if not prepared.citations:
             return [], iter((NO_CONTEXT_ANSWER,))

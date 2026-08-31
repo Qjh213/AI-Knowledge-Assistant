@@ -73,6 +73,18 @@ class DocumentRepository:
         return items, total
 
     @staticmethod
+    def list_all_for_knowledge_base(
+        session: Session,
+        knowledge_base_id: UUID,
+    ) -> list[Document]:
+        statement = (
+            select(Document)
+            .where(Document.knowledge_base_id == knowledge_base_id)
+            .order_by(Document.created_at.asc(), Document.id.asc())
+        )
+        return list(session.scalars(statement).all())
+
+    @staticmethod
     def create(
         session: Session,
         document: Document,
