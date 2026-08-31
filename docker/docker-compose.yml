@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - ./volumes/postgres:/var/lib/postgresql/data
     healthcheck:
@@ -50,8 +50,8 @@ services:
       MINIO_SECRET_KEY: minioadmin
     command: minio server /minio_data --console-address ":9001"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - ./volumes/minio:/minio_data
     healthcheck:
@@ -69,8 +69,8 @@ services:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
     ports:
-      - "19530:19530"
-      - "9091:9091"
+      - "127.0.0.1:19530:19530"
+      - "127.0.0.1:9091:9091"
     volumes:
       - ./volumes/milvus:/var/lib/milvus
     depends_on:
@@ -78,3 +78,72 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+
+  backend:
+    profiles: ["app"]
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: aka-backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      ENABLE_DOCS: "false"
+      EXPOSE_ERROR_DETAILS: "false"
+      LOG_LEVEL: INFO
+      CORS_ORIGINS: '["http://localhost:${APP_PORT:-8080}"]'
+      TRUSTED_HOSTS: '["localhost","127.0.0.1","backend"]'
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-120}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      DATABASE_URL: postgresql+psycopg2://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/knowledge
+      MILVUS_URI: http://milvus:19530
+      MILVUS_TOKEN: ${MILVUS_TOKEN:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      CHAT_MODEL: ${CHAT_MODEL:-deepseek-v4-flash}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
+      SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://api.siliconflow.cn/v1}
+      MINERU_API_TOKEN: ${MINERU_API_TOKEN:-}
+      MINERU_BASE_URL: ${MINERU_BASE_URL:-https://mineru.net/api/v4}
+      DOCUMENT_STORAGE_PATH: /app/data/documents
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-100}
+      BACKGROUND_WORKER_COUNT: ${BACKGROUND_WORKER_COUNT:-3}
+    volumes:
+      - document-storage:/app/data/documents
+    depends_on:
+      postgres:
+        condition: service_healthy
+      milvus:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=5)",
+        ]
+      interval: 15s
+      timeout: 6s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    profiles: ["app"]
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
+    container_name: aka-frontend
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  document-storage:

@@ -17,3 +17,8 @@ export interface KnowledgeBaseCreate {
   name: string
   description?: string | null
 }
+
+export interface KnowledgeBaseUpdate {
+  name?: string
+  description?: string | null
+}

@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   CalendarDays,
   Database,
+  PencilLine,
   RefreshCw,
   Trash2,
 } from 'lucide-react'
@@ -11,8 +12,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   deleteKnowledgeBase,
   getKnowledgeBase,
+  updateKnowledgeBase,
 } from '../api/knowledgeBases'
 import { DeleteKnowledgeBaseDialog } from '../components/knowledge-bases/DeleteKnowledgeBaseDialog'
+import { EditKnowledgeBaseDialog } from '../components/knowledge-bases/EditKnowledgeBaseDialog'
 import { ConversationPanel } from '../components/conversations/ConversationPanel'
 import { DocumentPanel } from '../components/documents/DocumentPanel'
 import { useToast } from '../lib/toast'
@@ -33,6 +36,7 @@ export function KnowledgeBaseDetailPage() {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
 
   const knowledgeBaseQuery = useQuery({
     queryKey: ['knowledge-base', knowledgeBaseId],
@@ -56,6 +60,26 @@ export function KnowledgeBaseDetailPage() {
     onError: (error) => {
       showToast(
         error instanceof Error ? error.message : '删除知识库失败。',
+        'error',
+      )
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: (name: string) =>
+      updateKnowledgeBase(knowledgeBaseId!, { name }),
+    onSuccess: async (updatedKnowledgeBase) => {
+      queryClient.setQueryData(
+        ['knowledge-base', knowledgeBaseId],
+        updatedKnowledgeBase,
+      )
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] })
+      setEditDialogOpen(false)
+      showToast('知识库名称已更新。')
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error ? error.message : '更新知识库名称失败。',
         'error',
       )
     },
@@ -132,16 +156,28 @@ export function KnowledgeBaseDetailPage() {
           </div>
         </div>
 
-        <button
-          onClick={() => {
-            deleteMutation.reset()
-            setDeleteDialogOpen(true)
-          }}
-          className="inline-flex h-10 items-center justify-center gap-2 self-start rounded-xl border border-rose-200 bg-white px-4 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
-        >
-          <Trash2 size={17} />
-          删除知识库
-        </button>
+        <div className="flex flex-wrap gap-3 self-start">
+          <button
+            onClick={() => {
+              updateMutation.reset()
+              setEditDialogOpen(true)
+            }}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50"
+          >
+            <PencilLine size={17} />
+            编辑名称
+          </button>
+          <button
+            onClick={() => {
+              deleteMutation.reset()
+              setDeleteDialogOpen(true)
+            }}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
+          >
+            <Trash2 size={17} />
+            删除知识库
+          </button>
+        </div>
       </div>
 
       <DocumentPanel knowledgeBaseId={knowledgeBase.id} />
@@ -165,6 +201,24 @@ export function KnowledgeBaseDetailPage() {
           }
         }}
         onConfirm={() => deleteMutation.mutate()}
+      />
+
+      <EditKnowledgeBaseDialog
+        key={`${knowledgeBase.name}:${editDialogOpen}`}
+        open={editDialogOpen}
+        currentName={knowledgeBase.name}
+        isPending={updateMutation.isPending}
+        errorMessage={
+          updateMutation.isError
+            ? updateMutation.error instanceof Error
+              ? updateMutation.error.message
+              : '更新失败，请稍后重试。'
+            : undefined
+        }
+        onClose={() => {
+          if (!updateMutation.isPending) setEditDialogOpen(false)
+        }}
+        onConfirm={(name) => updateMutation.mutate(name)}
       />
     </div>
   )

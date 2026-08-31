@@ -45,6 +45,16 @@ export function getConversation(
   )
 }
 
+export function deleteConversation(
+  knowledgeBaseId: string,
+  conversationId: string,
+): Promise<void> {
+  return apiRequest<void>(
+    `${conversationsPath(knowledgeBaseId)}/${conversationId}`,
+    { method: 'DELETE' },
+  )
+}
+
 export function getMessages(
   knowledgeBaseId: string,
   conversationId: string,
