@@ -6,6 +6,7 @@ import {
   Clock3,
   FileText,
   FileUp,
+  Info,
   LoaderCircle,
   Play,
   RefreshCw,
@@ -386,6 +387,18 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
               }}
             />
           </label>
+        </div>
+      </div>
+
+      <div className="mx-6 mt-5 flex items-start gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3 text-xs leading-5 text-sky-800">
+        <Info size={16} className="mt-0.5 shrink-0" />
+        <div>
+          <p className="font-semibold">批量上传与处理规则</p>
+          <p className="mt-0.5 text-sky-700">
+            可一次选择多个 TXT、Markdown、PDF 或 DOCX 文件，每个文件最大 20 MB；
+            上传最多同时进行 3 个。本地处理最多同时进行 2 个；MinerU 仅处理 PDF
+            和 DOCX，最多同时提交 3 个。其余文件会自动排队，不限制本次选择总数。
+          </p>
         </div>
       </div>
 
