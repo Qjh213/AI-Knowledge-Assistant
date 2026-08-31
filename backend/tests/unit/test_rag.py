@@ -68,6 +68,16 @@ class FakeChatService:
         return iter(self.chunks)
 
 
+class FakeMetadataService:
+    def __init__(self, answer=None) -> None:
+        self.result = answer
+        self.calls = []
+
+    def answer(self, session, knowledge_base_id, question):
+        self.calls.append((knowledge_base_id, question))
+        return self.result
+
+
 def create_retrieval_result(
     *,
     content,
@@ -262,4 +272,55 @@ def test_rag_streams_fallback_without_calling_model():
 
     assert citations == []
     assert list(chunks) == [NO_CONTEXT_ANSWER]
+    assert chat_service.stream_called is False
+
+
+def test_rag_returns_metadata_answer_without_retrieval_or_model():
+    knowledge_base_id = uuid4()
+    retrieval_service = FakeRetrievalService()
+    chat_service = FakeChatService()
+    metadata_service = FakeMetadataService(
+        "当前知识库共有 2 个文件。"
+    )
+    service = RagService(
+        retrieval_service=retrieval_service,
+        chat_service=chat_service,
+        metadata_service=metadata_service,
+    )
+
+    response = service.answer(
+        session=object(),
+        knowledge_base_id=knowledge_base_id,
+        request=RagQuestionRequest(
+            question="当前知识库有什么文件？"
+        ),
+    )
+
+    assert response.answer == "当前知识库共有 2 个文件。"
+    assert response.citations == []
+    assert retrieval_service.received_request is None
+    assert chat_service.called is False
+
+
+def test_rag_streams_metadata_answer_without_model():
+    chat_service = FakeChatService()
+    metadata_service = FakeMetadataService(
+        "当前知识库没有处理失败的文件。"
+    )
+    service = RagService(
+        retrieval_service=FakeRetrievalService(),
+        chat_service=chat_service,
+        metadata_service=metadata_service,
+    )
+
+    citations, chunks = service.stream_answer(
+        session=object(),
+        knowledge_base_id=uuid4(),
+        request=RagQuestionRequest(
+            question="哪些文件处理失败了？"
+        ),
+    )
+
+    assert citations == []
+    assert list(chunks) == ["当前知识库没有处理失败的文件。"]
     assert chat_service.stream_called is False
