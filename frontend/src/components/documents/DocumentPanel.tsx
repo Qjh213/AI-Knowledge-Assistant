@@ -59,6 +59,87 @@ function formatBytes(value: number) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`
 }
 
+interface BatchUploadResult {
+  uploaded: number
+  failed: Array<{ file: File; error: unknown }>
+}
+
+interface BatchOperationResult {
+  completed: number
+  failed: number
+}
+
+interface BatchProcessInput {
+  mode: 'local' | 'mineru'
+  documentIds: string[]
+}
+
+async function uploadFiles(
+  files: File[],
+  uploader: (file: File) => Promise<unknown>,
+  concurrency = 3,
+): Promise<BatchUploadResult> {
+  let nextIndex = 0
+  let uploaded = 0
+  const failed: BatchUploadResult['failed'] = []
+
+  async function worker() {
+    while (nextIndex < files.length) {
+      const file = files[nextIndex]
+      nextIndex += 1
+
+      try {
+        await uploader(file)
+        uploaded += 1
+      } catch (error) {
+        failed.push({ file, error })
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(concurrency, files.length) },
+      () => worker(),
+    ),
+  )
+
+  return { uploaded, failed }
+}
+
+async function runBatchOperations(
+  documentIds: string[],
+  operation: (documentId: string) => Promise<unknown>,
+  concurrency: number,
+): Promise<BatchOperationResult> {
+  let nextIndex = 0
+  let completed = 0
+  let failed = 0
+
+  async function worker() {
+    while (nextIndex < documentIds.length) {
+      const documentId = documentIds[nextIndex]
+      nextIndex += 1
+
+      try {
+        await operation(documentId)
+        completed += 1
+      } catch {
+        failed += 1
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(concurrency, documentIds.length) },
+      () => worker(),
+    ),
+  )
+
+  return { completed, failed }
+}
+
 export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
@@ -129,10 +210,20 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
   }, [documentsQuery.data, knowledgeBaseId, queryClient, queryKey])
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadDocument(knowledgeBaseId, file),
-    onSuccess: async () => {
+    mutationFn: (files: File[]) =>
+      uploadFiles(files, (file) => uploadDocument(knowledgeBaseId, file)),
+    onSuccess: async ({ uploaded, failed }) => {
       await queryClient.invalidateQueries({ queryKey })
-      showToast('文档上传成功，请开始处理。')
+      if (failed.length === 0) {
+        showToast(`已上传 ${uploaded} 个文档，请开始处理。`)
+        return
+      }
+
+      const failedNames = failed.map(({ file }) => file.name).join('、')
+      showToast(
+        `已上传 ${uploaded} 个，失败 ${failed.length} 个：${failedNames}`,
+        'error',
+      )
     },
     onError: (error) =>
       showToast(error instanceof Error ? error.message : '文档上传失败。', 'error'),
@@ -166,6 +257,30 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
       ),
   })
 
+  const batchProcessMutation = useMutation({
+    mutationFn: ({ mode, documentIds }: BatchProcessInput) =>
+      runBatchOperations(
+        documentIds,
+        (documentId) =>
+          mode === 'mineru'
+            ? processDocumentWithMinerU(knowledgeBaseId, documentId)
+            : processDocument(knowledgeBaseId, documentId),
+        mode === 'mineru' ? 3 : 2,
+      ),
+    onSuccess: async ({ completed, failed }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] }),
+      ])
+      showToast(
+        failed === 0
+          ? `已启动 ${completed} 个文档的批量处理。`
+          : `批量处理完成：成功 ${completed} 个，失败 ${failed} 个。`,
+        failed === 0 ? 'success' : 'error',
+      )
+    },
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (documentId: string) =>
       deleteDocument(knowledgeBaseId, documentId),
@@ -184,7 +299,22 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
     uploadMutation.error ??
     processMutation.error ??
     mineruMutation.error ??
+    batchProcessMutation.error ??
     deleteMutation.error
+
+  const processableDocuments =
+    documentsQuery.data?.items.filter(
+      (item) => item.status === 'pending' || item.status === 'failed',
+    ) ?? []
+  const mineruProcessableDocuments = processableDocuments.filter((item) =>
+    /\.(pdf|docx)$/i.test(item.original_filename),
+  )
+  const anyOperationPending =
+    uploadMutation.isPending ||
+    processMutation.isPending ||
+    mineruMutation.isPending ||
+    batchProcessMutation.isPending ||
+    deleteMutation.isPending
 
   return (
     <section className="mt-10 rounded-3xl border border-slate-200 bg-white shadow-sm shadow-slate-200/40">
@@ -201,25 +331,62 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
           </div>
         </div>
 
-        <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
-          {uploadMutation.isPending ? (
-            <LoaderCircle size={17} className="animate-spin" />
-          ) : (
-            <FileUp size={17} />
+        <div className="flex flex-wrap items-center gap-2">
+          {processableDocuments.length > 1 && (
+            <button
+              type="button"
+              disabled={anyOperationPending}
+              onClick={() =>
+                batchProcessMutation.mutate({
+                  mode: 'local',
+                  documentIds: processableDocuments.map((item) => item.id),
+                })
+              }
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+            >
+              <Play size={15} />
+              批量本地处理 ({processableDocuments.length})
+            </button>
           )}
-          {uploadMutation.isPending ? '上传中' : '上传文档'}
-          <input
-            type="file"
-            className="sr-only"
-            accept=".txt,.md,.pdf,.docx"
-            disabled={uploadMutation.isPending}
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) uploadMutation.mutate(file)
-              event.target.value = ''
-            }}
-          />
-        </label>
+          {mineruProcessableDocuments.length > 1 && (
+            <button
+              type="button"
+              disabled={anyOperationPending}
+              onClick={() =>
+                batchProcessMutation.mutate({
+                  mode: 'mineru',
+                  documentIds: mineruProcessableDocuments.map(
+                    (item) => item.id,
+                  ),
+                })
+              }
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-50 px-3 text-xs font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+            >
+              <Sparkles size={15} />
+              批量 MinerU ({mineruProcessableDocuments.length})
+            </button>
+          )}
+          <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
+            {uploadMutation.isPending ? (
+              <LoaderCircle size={17} className="animate-spin" />
+            ) : (
+              <FileUp size={17} />
+            )}
+            {uploadMutation.isPending ? '上传中' : '上传文档'}
+            <input
+              type="file"
+              multiple
+              className="sr-only"
+              accept=".txt,.md,.pdf,.docx"
+              disabled={uploadMutation.isPending}
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? [])
+                if (files.length > 0) uploadMutation.mutate(files)
+                event.target.value = ''
+              }}
+            />
+          </label>
+        </div>
       </div>
 
       {mutationError && (
@@ -280,9 +447,7 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
               deleteMutation.isPending && deleteMutation.variables === document.id
             const canUseMinerU = /\.(pdf|docx)$/i.test(document.original_filename)
             const operationsPending =
-              processMutation.isPending ||
-              mineruMutation.isPending ||
-              deleteMutation.isPending
+              anyOperationPending
 
             return (
               <div

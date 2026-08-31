@@ -114,7 +114,61 @@ describe('DocumentPanel', () => {
     expect(mockedUploadDocument.mock.calls[0]?.[0]).toBe('knowledge-base-1')
     expect(mockedUploadDocument.mock.calls[0]?.[1]).toBe(file)
     expect(
-      await screen.findByText('文档上传成功，请开始处理。'),
+      await screen.findByText('已上传 1 个文档，请开始处理。'),
+    ).toBeInTheDocument()
+  })
+
+  it('uploads multiple selected files', async () => {
+    const user = userEvent.setup()
+    mockedGetDocuments.mockResolvedValue({
+      items: [],
+      total: 0,
+      offset: 0,
+      limit: 100,
+    })
+    mockedUploadDocument.mockResolvedValue(createDocument('pending'))
+    const { container } = renderPanel()
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')
+    const files = [
+      new File(['one'], 'one.txt', { type: 'text/plain' }),
+      new File(['two'], 'two.md', { type: 'text/markdown' }),
+      new File(['three'], 'three.pdf', { type: 'application/pdf' }),
+    ]
+
+    expect(input).not.toBeNull()
+    await user.upload(input!, files)
+
+    await waitFor(() => {
+      expect(mockedUploadDocument).toHaveBeenCalledTimes(3)
+    })
+    expect(mockedUploadDocument.mock.calls.map((call) => call[1])).toEqual(files)
+    expect(
+      await screen.findByText('已上传 3 个文档，请开始处理。'),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps successful uploads when one file fails', async () => {
+    const user = userEvent.setup()
+    mockedGetDocuments.mockResolvedValue({
+      items: [],
+      total: 0,
+      offset: 0,
+      limit: 100,
+    })
+    mockedUploadDocument
+      .mockResolvedValueOnce(createDocument('pending'))
+      .mockRejectedValueOnce(new Error('unsupported file'))
+    const { container } = renderPanel()
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')
+    const files = [
+      new File(['one'], 'one.txt', { type: 'text/plain' }),
+      new File(['bad'], 'bad.pdf', { type: 'application/pdf' }),
+    ]
+
+    await user.upload(input!, files)
+
+    expect(
+      await screen.findByText('已上传 1 个，失败 1 个：bad.pdf'),
     ).toBeInTheDocument()
   })
 
@@ -137,6 +191,78 @@ describe('DocumentPanel', () => {
       'document-1',
     )
     expect(await screen.findByText('文档处理完成。')).toBeInTheDocument()
+  })
+
+  it('processes all pending documents locally', async () => {
+    const user = userEvent.setup()
+    const first = createDocument('pending')
+    const second = {
+      ...createDocument('pending'),
+      id: 'document-2',
+      original_filename: 'notes.md',
+    }
+    mockedGetDocuments.mockResolvedValue({
+      items: [first, second],
+      total: 2,
+      offset: 0,
+      limit: 100,
+    })
+    mockedProcessDocument.mockResolvedValue(createDocument('completed'))
+    renderPanel()
+
+    await user.click(
+      await screen.findByRole('button', { name: '批量本地处理 (2)' }),
+    )
+
+    await waitFor(() => {
+      expect(mockedProcessDocument).toHaveBeenCalledTimes(2)
+    })
+    expect(mockedProcessDocument.mock.calls).toEqual([
+      ['knowledge-base-1', 'document-1'],
+      ['knowledge-base-1', 'document-2'],
+    ])
+    expect(
+      await screen.findByText('已启动 2 个文档的批量处理。'),
+    ).toBeInTheDocument()
+  })
+
+  it('submits only supported documents in a MinerU batch', async () => {
+    const user = userEvent.setup()
+    const textDocument = createDocument('pending')
+    const pdfDocument = {
+      ...createDocument('pending'),
+      id: 'document-2',
+      original_filename: 'guide.pdf',
+    }
+    const docxDocument = {
+      ...createDocument('pending'),
+      id: 'document-3',
+      original_filename: 'manual.docx',
+    }
+    mockedGetDocuments.mockResolvedValue({
+      items: [textDocument, pdfDocument, docxDocument],
+      total: 3,
+      offset: 0,
+      limit: 100,
+    })
+    mockedProcessDocumentWithMinerU.mockResolvedValue({
+      ...pdfDocument,
+      status: 'processing',
+      parser: 'mineru',
+    })
+    renderPanel()
+
+    await user.click(
+      await screen.findByRole('button', { name: '批量 MinerU (2)' }),
+    )
+
+    await waitFor(() => {
+      expect(mockedProcessDocumentWithMinerU).toHaveBeenCalledTimes(2)
+    })
+    expect(mockedProcessDocumentWithMinerU.mock.calls).toEqual([
+      ['knowledge-base-1', 'document-2'],
+      ['knowledge-base-1', 'document-3'],
+    ])
   })
 
   it('submits a PDF document to MinerU', async () => {
