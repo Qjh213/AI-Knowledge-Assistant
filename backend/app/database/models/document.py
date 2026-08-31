@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     Enum as SqlEnum,
     ForeignKey,
     Index,
@@ -29,6 +30,11 @@ class DocumentStatus(str, Enum):
     FAILED = "failed"
 
 
+class DocumentParser(str, Enum):
+    LOCAL = "local"
+    MINERU = "mineru"
+
+
 class Document(TimestampMixin, Base):
     __tablename__ = "documents"
     __table_args__ = (
@@ -38,6 +44,10 @@ class Document(TimestampMixin, Base):
             name="uq_documents_knowledge_base_checksum",
         ),
         Index("ix_documents_knowledge_base_status", "knowledge_base_id", "status"),
+        CheckConstraint(
+            "processing_progress >= 0 AND processing_progress <= 100",
+            name="processing_progress_range",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -91,6 +101,27 @@ class Document(TimestampMixin, Base):
         nullable=True,
     )
     chunk_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+    parser: Mapped[DocumentParser] = mapped_column(
+        SqlEnum(
+            DocumentParser,
+            name="document_parser",
+            values_callable=lambda enum_class: [
+                member.value for member in enum_class
+            ],
+        ),
+        default=DocumentParser.LOCAL,
+        nullable=False,
+    )
+    external_task_id: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        index=True,
+    )
+    processing_progress: Mapped[int] = mapped_column(
         Integer,
         default=0,
         nullable=False,

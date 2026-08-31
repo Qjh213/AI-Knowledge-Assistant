@@ -6,13 +6,17 @@ from app.core.exceptions import DocumentProcessingError
 from app.database.models import (
     Document,
     DocumentChunk,
+    DocumentParser,
     DocumentStatus,
 )
 from app.repositories.document import DocumentRepository
 from app.repositories.document_chunk import DocumentChunkRepository
 from app.services.document import DocumentService
 from app.services.document_chunker import DocumentChunker
-from app.services.document_parser import DocumentParserService
+from app.services.document_parser import (
+    DocumentParserService,
+    ParsedDocument,
+)
 from app.services.embedding import EmbeddingService
 from app.services.vector_store import VectorStoreService
 
@@ -38,6 +42,71 @@ class DocumentProcessingService:
             document_service or DocumentService()
         )
 
+    def index_parsed_document(
+        self,
+        session: Session,
+        document: Document,
+        parsed_document: ParsedDocument,
+    ) -> Document:
+        """Chunk, embed, and index an already parsed document."""
+        text_chunks = self.chunker.split(
+            parsed_document
+        )
+        embedded_chunks = (
+            self.embedding_service.embed_chunks(
+                text_chunks
+            )
+        )
+
+        # 清除上一次处理可能留下的数据。
+        self.vector_store.delete_document(document.id)
+
+        DocumentChunkRepository.delete_for_document(
+            session,
+            document.id,
+        )
+
+        database_chunks = [
+            DocumentChunk(
+                document_id=document.id,
+                chunk_index=chunk.chunk_index,
+                content=chunk.text,
+                page_number=chunk.page_number,
+                token_count=chunk.token_count,
+                extra_metadata=chunk.metadata,
+            )
+            for chunk in text_chunks
+        ]
+
+        DocumentChunkRepository.create_many(
+            session,
+            database_chunks,
+        )
+
+        self.vector_store.insert_chunks(
+            knowledge_base_id=document.knowledge_base_id,
+            document_id=document.id,
+            chunk_ids=[
+                chunk.id
+                for chunk in database_chunks
+            ],
+            chunks=embedded_chunks,
+        )
+
+        DocumentRepository.update_processing_state(
+            session,
+            document,
+            DocumentStatus.COMPLETED,
+            chunk_count=len(database_chunks),
+            error_message=None,
+            processing_progress=100,
+        )
+
+        session.commit()
+        session.refresh(document)
+
+        return document
+
     def process(
         self,
         session: Session,
@@ -57,6 +126,8 @@ class DocumentProcessingService:
                 DocumentStatus.PROCESSING,
                 chunk_count=0,
                 error_message=None,
+                parser=DocumentParser.LOCAL,
+                processing_progress=0,
             )
             session.commit()
             session.refresh(document)
@@ -64,62 +135,12 @@ class DocumentProcessingService:
             parsed_document = self.parser.parse(
                 document.file_path
             )
-            text_chunks = self.chunker.split(
-                parsed_document
-            )
-            embedded_chunks = (
-                self.embedding_service.embed_chunks(
-                    text_chunks
-                )
-            )
 
-            # 清除可能由上一次失败处理留下的向量。
-            self.vector_store.delete_document(document.id)
-
-            DocumentChunkRepository.delete_for_document(
-                session,
-                document.id,
-            )
-
-            database_chunks = [
-                DocumentChunk(
-                    document_id=document.id,
-                    chunk_index=chunk.chunk_index,
-                    content=chunk.text,
-                    page_number=chunk.page_number,
-                    token_count=chunk.token_count,
-                    extra_metadata=chunk.metadata,
-                )
-                for chunk in text_chunks
-            ]
-
-            DocumentChunkRepository.create_many(
-                session,
-                database_chunks,
-            )
-
-            self.vector_store.insert_chunks(
-                knowledge_base_id=document.knowledge_base_id,
-                document_id=document.id,
-                chunk_ids=[
-                    chunk.id
-                    for chunk in database_chunks
-                ],
-                chunks=embedded_chunks,
-            )
-
-            DocumentRepository.update_processing_state(
+            return self.index_parsed_document(
                 session,
                 document,
-                DocumentStatus.COMPLETED,
-                chunk_count=len(database_chunks),
-                error_message=None,
+                parsed_document,
             )
-
-            session.commit()
-            session.refresh(document)
-
-            return document
 
         except Exception as exc:
             session.rollback()
@@ -149,6 +170,7 @@ class DocumentProcessingService:
                         DocumentStatus.FAILED,
                         chunk_count=0,
                         error_message=detail,
+                        processing_progress=0,
                     )
                     session.commit()
             except Exception:

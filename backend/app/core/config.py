@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -35,6 +36,16 @@ class Settings(BaseSettings):
 
     chunk_size: int = 1000
     chunk_overlap: int = 150
+
+    document_parser: Literal["local", "mineru", "auto"] = "auto"
+    mineru_api_token: str = ""
+    mineru_base_url: str = "https://mineru.net/api/v4"
+    mineru_model_version: Literal["pipeline", "vlm"] = "vlm"
+    mineru_enable_ocr: bool = True
+    mineru_enable_table: bool = True
+    mineru_enable_formula: bool = True
+    mineru_poll_interval_seconds: float = Field(default=3.0, gt=0)
+    mineru_timeout_seconds: int = Field(default=600, ge=30, le=3600)
 
     @property
     def max_upload_size_bytes(self) -> int:
