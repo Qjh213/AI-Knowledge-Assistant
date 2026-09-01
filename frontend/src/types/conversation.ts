@@ -13,6 +13,17 @@ export interface ConversationListResponse {
   limit: number
 }
 
+export interface RecentConversation extends Conversation {
+  knowledge_base_name: string
+}
+
+export interface RecentConversationListResponse {
+  items: RecentConversation[]
+  total: number
+  offset: number
+  limit: number
+}
+
 export interface RagCitation {
   reference: number
   chunk_id: string

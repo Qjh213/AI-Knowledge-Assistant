@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.database.models import Conversation
+from app.database.models import Conversation, KnowledgeBase
 from app.schemas.conversation import (
     ConversationCreate,
     ConversationUpdate,
@@ -11,6 +11,34 @@ from app.schemas.conversation import (
 
 
 class ConversationRepository:
+    @staticmethod
+    def list_recent(
+        session: Session,
+        offset: int = 0,
+        limit: int = 20,
+    ) -> tuple[list[tuple[Conversation, str]], int]:
+        total = session.scalar(
+            select(func.count()).select_from(Conversation)
+        ) or 0
+
+        statement = (
+            select(Conversation, KnowledgeBase.name)
+            .join(
+                KnowledgeBase,
+                KnowledgeBase.id == Conversation.knowledge_base_id,
+            )
+            .order_by(Conversation.updated_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        items = [
+            (conversation, knowledge_base_name)
+            for conversation, knowledge_base_name in session.execute(
+                statement
+            ).all()
+        ]
+        return items, total
+
     @staticmethod
     def get(
         session: Session,

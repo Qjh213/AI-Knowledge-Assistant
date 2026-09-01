@@ -57,3 +57,14 @@ class ConversationListResponse(BaseModel):
     total: int
     offset: int
     limit: int
+
+
+class RecentConversationResponse(ConversationResponse):
+    knowledge_base_name: str
+
+
+class RecentConversationListResponse(BaseModel):
+    items: list[RecentConversationResponse]
+    total: int
+    offset: int
+    limit: int

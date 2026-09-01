@@ -14,6 +14,18 @@ from app.services.knowledge_base import KnowledgeBaseService
 
 class ConversationService:
     @staticmethod
+    def list_recent(
+        session: Session,
+        offset: int = 0,
+        limit: int = 20,
+    ) -> tuple[list[tuple[Conversation, str]], int]:
+        return ConversationRepository.list_recent(
+            session,
+            offset=offset,
+            limit=limit,
+        )
+
+    @staticmethod
     def get(
         session: Session,
         knowledge_base_id: UUID,

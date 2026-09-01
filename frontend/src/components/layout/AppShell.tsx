@@ -3,11 +3,12 @@ import {
   Database,
   Menu,
   MessageSquareText,
-  Settings,
   X,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { getServiceConnection } from '../../api/health'
 
 const navigation = [
   { label: '知识库', to: '/knowledge-bases', icon: Database },
@@ -15,12 +16,26 @@ const navigation = [
     label: '最近对话',
     to: '/conversations',
     icon: MessageSquareText,
-    disabled: true,
   },
 ]
 
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const serviceQuery = useQuery({
+    queryKey: ['service-connection'],
+    queryFn: getServiceConnection,
+    refetchInterval: 30_000,
+    retry: false,
+  })
+  const connection = serviceQuery.data ?? {
+    state: 'offline' as const,
+    label: '正在检查服务…',
+  }
+  const statusColor = {
+    healthy: 'bg-emerald-500',
+    degraded: 'bg-amber-500',
+    offline: 'bg-rose-500',
+  }[connection.state]
 
   return (
     <div className="min-h-screen bg-[#f5f7fb] text-slate-900">
@@ -63,21 +78,6 @@ export function AppShell() {
           {navigation.map((item) => {
             const Icon = item.icon
 
-            if (item.disabled) {
-              return (
-                <div
-                  key={item.to}
-                  className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-400"
-                >
-                  <Icon size={19} />
-                  <span>{item.label}</span>
-                  <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px]">
-                    即将开放
-                  </span>
-                </div>
-              )
-            }
-
             return (
               <NavLink
                 key={item.to}
@@ -99,13 +99,9 @@ export function AppShell() {
         </nav>
 
         <div className="border-t border-slate-100 p-4">
-          <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50">
-            <Settings size={19} />
-            系统设置
-          </button>
-          <div className="mt-3 flex items-center gap-2 px-3 text-xs text-slate-400">
-            <span className="size-2 rounded-full bg-emerald-500" />
-            后端服务待连接
+          <div className="flex items-center gap-2 px-3 py-2 text-xs text-slate-500">
+            <span className={`size-2 rounded-full ${statusColor}`} />
+            {connection.label}
           </div>
         </div>
       </aside>

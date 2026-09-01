@@ -3,6 +3,7 @@ import { AppShell } from './components/layout/AppShell'
 import { KnowledgeBaseDetailPage } from './pages/KnowledgeBaseDetailPage'
 import { KnowledgeBasesPage } from './pages/KnowledgeBasesPage'
 import { ConversationPage } from './pages/ConversationPage'
+import { RecentConversationsPage } from './pages/RecentConversationsPage'
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
       <Route element={<AppShell />}>
         <Route index element={<Navigate to="/knowledge-bases" replace />} />
         <Route path="/knowledge-bases" element={<KnowledgeBasesPage />} />
+        <Route path="/conversations" element={<RecentConversationsPage />} />
         <Route
           path="/knowledge-bases/:knowledgeBaseId"
           element={<KnowledgeBaseDetailPage />}

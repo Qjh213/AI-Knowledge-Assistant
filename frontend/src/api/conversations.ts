@@ -6,10 +6,24 @@ import type {
   MessageListResponse,
   MessageTurnResponse,
   ConversationStreamEvent,
+  RecentConversationListResponse,
 } from '../types/conversation'
 
 function conversationsPath(knowledgeBaseId: string) {
   return `/knowledge-bases/${knowledgeBaseId}/conversations`
+}
+
+export function getRecentConversations(
+  offset = 0,
+  limit = 50,
+): Promise<RecentConversationListResponse> {
+  const query = new URLSearchParams({
+    offset: String(offset),
+    limit: String(limit),
+  })
+  return apiRequest<RecentConversationListResponse>(
+    `/conversations/recent?${query.toString()}`,
+  )
 }
 
 export function getConversations(
