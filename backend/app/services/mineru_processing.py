@@ -3,7 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import DocumentProcessingError
+from app.core.exceptions import DocumentProcessingError, MinerUResultDownloadError
 from app.database.models import (
     Document,
     DocumentParser,
@@ -348,7 +348,9 @@ class MinerUDocumentProcessingService:
                         chunk_count=0,
                         error_message=str(exc),
                         parser=DocumentParser.MINERU,
-                        processing_progress=0,
+                        processing_progress=(
+                            99 if isinstance(exc, MinerUResultDownloadError) else 0
+                        ),
                     )
                     DocumentRepository.mark_processing_finished(
                         session,

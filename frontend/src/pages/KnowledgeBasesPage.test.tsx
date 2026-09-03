@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDashboardOverview } from '../api/dashboard'
@@ -40,6 +41,9 @@ function renderPage() {
 }
 
 beforeEach(() => {
+  // jsdom does not implement the browser's modal dialog methods.
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
+  HTMLDialogElement.prototype.close = function () { this.removeAttribute('open') }
   mockedGetDashboardOverview.mockReset()
   mockedGetKnowledgeBases.mockReset()
 })
@@ -106,6 +110,31 @@ describe('KnowledgeBasesPage', () => {
     renderPage()
 
     expect(await screen.findByText('创建第一个知识库')).toBeInTheDocument()
+  })
+
+  it('opens the guide, closes it, and starts creating a knowledge base', async () => {
+    const user = userEvent.setup()
+    mockedGetDashboardOverview.mockResolvedValue({ knowledge_base_count: 0, processed_document_count: 0, conversation_count: 0 })
+    mockedGetKnowledgeBases.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 20 })
+    renderPage()
+    const trigger = await screen.findByRole('button', { name: '查看使用指南' })
+    await user.click(trigger)
+    let guide = screen.getByRole('dialog', { name: '知识库使用指南' })
+    expect(within(guide).getAllByRole('listitem')).toHaveLength(4)
+    expect(within(guide).getByText(/只有处理完成的文件才能用于问答/)).toBeInTheDocument()
+    await user.click(within(guide).getByRole('button', { name: '关闭使用指南' }))
+    expect(screen.queryByRole('dialog', { name: '知识库使用指南' })).not.toBeInTheDocument()
+    await user.click(trigger)
+    guide = screen.getByRole('dialog', { name: '知识库使用指南' })
+    fireEvent(guide, new Event('cancel', { bubbles: true, cancelable: true }))
+    expect(screen.queryByRole('dialog', { name: '知识库使用指南' })).not.toBeInTheDocument()
+    await user.click(trigger)
+    await user.click(screen.getByRole('button', { name: '我知道了' }))
+    expect(screen.queryByRole('dialog', { name: '知识库使用指南' })).not.toBeInTheDocument()
+    await user.click(trigger)
+    await user.click(screen.getByRole('button', { name: '开始创建' }))
+    expect(screen.queryByRole('dialog', { name: '知识库使用指南' })).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '创建知识库' })).toBeInTheDocument()
   })
 
   it('shows the backend error message when loading fails', async () => {

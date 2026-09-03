@@ -18,6 +18,11 @@ def make_client(handler) -> MinerUClient:
     )
 
 
+@pytest.fixture(autouse=True)
+def no_retry_sleep(monkeypatch):
+    monkeypatch.setattr("app.services.mineru.sleep", lambda seconds: None)
+
+
 def test_request_upload_url() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/v4/file-urls/batch"
@@ -188,3 +193,51 @@ def test_reject_oversized_result_download() -> None:
             "https://download.example/result.zip",
             max_download_bytes=2,
         )
+
+
+def test_retry_transient_download_and_discard_partial_archive():
+    class BrokenStream(httpx.SyncByteStream):
+        def __iter__(self):
+            yield b"partial-corrupt-data"
+            raise httpx.ReadError("network interrupted")
+    calls = []
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            return httpx.Response(200, stream=BrokenStream())
+        return httpx.Response(200, content=create_zip({"full.md": b"recovered"}))
+    assert make_client(handler).download_markdown("https://download.example/file") == "recovered"
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("failure,expected", [("eof", 3), ("503", 3), ("403", 1), ("certificate", 1)])
+def test_download_retries_are_bounded_and_do_not_leak_urls(failure, expected):
+    calls = []
+    url = "https://download.example/file?secret=TOP-SECRET"
+    def handler(request):
+        calls.append(request)
+        if failure == "eof":
+            raise httpx.ConnectError("UNEXPECTED_EOF " + url)
+        if failure == "certificate":
+            raise httpx.ConnectError("CERTIFICATE_VERIFY_FAILED " + url)
+        return httpx.Response(int(failure))
+    with pytest.raises(MinerUServiceError) as caught:
+        make_client(handler).download_markdown(url)
+    assert len(calls) == expected
+    assert "TOP-SECRET" not in str(caught.value)
+    assert "已完成解析" in str(caught.value)
+
+
+def test_status_query_retries_but_submission_is_not_replayed():
+    calls = []
+    def handler(request):
+        calls.append(request)
+        raise httpx.ConnectError("temporary failure")
+    client = make_client(handler)
+    with pytest.raises(MinerUServiceError):
+        client.get_batch_result("task")
+    assert len(calls) == 3
+    calls.clear()
+    with pytest.raises(MinerUServiceError):
+        client.request_upload_url("lesson.pdf")
+    assert len(calls) == 1

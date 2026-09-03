@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom'
 import { getKnowledgeBases } from '../api/knowledgeBases'
 import { getDashboardOverview } from '../api/dashboard'
 import { CreateKnowledgeBaseDialog } from '../components/knowledge-bases/CreateKnowledgeBaseDialog'
+import { KnowledgeBaseGuideDialog } from '../components/knowledge-bases/KnowledgeBaseGuideDialog'
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -23,6 +24,7 @@ function formatDate(value: string) {
 
 export function KnowledgeBasesPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [guideDialogOpen, setGuideDialogOpen] = useState(false)
   const knowledgeBasesQuery = useQuery({
     queryKey: ['knowledge-bases'],
     queryFn: () => getKnowledgeBases(),
@@ -175,14 +177,22 @@ export function KnowledgeBasesPage() {
               <p className="mt-2 text-sm leading-6 text-slate-500">
                 知识库用于组织相关文档。创建后，你可以上传资料、完成向量处理并开始连续对话。
               </p>
-              <button className="mt-6 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:text-indigo-700">
-                了解工作流程
+              <button onClick={() => setGuideDialogOpen(true)} className="mt-6 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:text-indigo-700">
+                查看使用指南
                 <ArrowRight size={17} />
               </button>
             </div>
           </section>
         )}
 
+      <KnowledgeBaseGuideDialog
+        open={guideDialogOpen}
+        onClose={() => setGuideDialogOpen(false)}
+        onCreate={() => {
+          setGuideDialogOpen(false)
+          setCreateDialogOpen(true)
+        }}
+      />
       <CreateKnowledgeBaseDialog
         open={createDialogOpen}
         onClose={() => setCreateDialogOpen(false)}

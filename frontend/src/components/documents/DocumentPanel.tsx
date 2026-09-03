@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -148,38 +148,15 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
     () => ['documents', knowledgeBaseId] as const,
     [knowledgeBaseId],
   )
-  const refreshInFlight = useRef(false)
-
   const documentsQuery = useQuery({
     queryKey,
     queryFn: () => getDocuments(knowledgeBaseId),
+    // Keep polling even when consecutive responses are structurally identical.
+    refetchInterval: (query) =>
+      query.state.data?.items.some((item) => item.status === 'processing')
+        ? 3_000
+        : false,
   })
-
-  useEffect(() => {
-    const processingDocuments = documentsQuery.data?.items.filter(
-      (item) => item.status === 'processing',
-    )
-
-    if (!processingDocuments?.length) return
-
-    let cancelled = false
-    const timeoutId = window.setTimeout(async () => {
-      if (refreshInFlight.current) return
-      refreshInFlight.current = true
-
-      try {
-        if (cancelled) return
-        await queryClient.invalidateQueries({ queryKey })
-      } finally {
-        refreshInFlight.current = false
-      }
-    }, 3_000)
-
-    return () => {
-      cancelled = true
-      window.clearTimeout(timeoutId)
-    }
-  }, [documentsQuery.data, knowledgeBaseId, queryClient, queryKey])
 
   const uploadMutation = useMutation({
     mutationFn: (files: File[]) =>
@@ -234,7 +211,7 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
       retryDocumentProcessing(knowledgeBaseId, documentId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey })
-      showToast('失败任务已重新加入后台队列。')
+      showToast('任务已重新加入后台队列。')
     },
     onError: (error) =>
       showToast(error instanceof Error ? error.message : '重试失败。', 'error'),
@@ -534,10 +511,14 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
                       )}
                     </>
                   )}
-                  {document.status === 'failed' && (
+                  {(document.status === 'failed' || document.status === 'processing') && (
                     <button
                       disabled={operationsPending}
-                      onClick={() => retryMutation.mutate(document.id)}
+                      onClick={() => {
+                        if (document.status === 'failed' || window.confirm('仅恢复已中断的任务；仍在运行的任务会被服务器拒绝，不会重复启动。是否继续？')) {
+                          retryMutation.mutate(document.id)
+                        }
+                      }}
                       className="inline-flex h-9 items-center gap-2 rounded-xl bg-amber-50 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
                     >
                       {retryMutation.isPending &&
@@ -546,7 +527,7 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
                       ) : (
                         <RefreshCw size={15} />
                       )}
-                      重试
+                      {document.status === 'processing' ? '恢复处理' : '重试'}
                     </button>
                   )}
                   <button

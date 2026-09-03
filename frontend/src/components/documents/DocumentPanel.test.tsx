@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -80,6 +80,50 @@ beforeEach(() => {
 })
 
 describe('DocumentPanel', () => {
+  it.each(['completed', 'failed'] as const)('keeps polling identical batch states and stops at %s', async (terminalStatus) => {
+    vi.useFakeTimers()
+    const processing = {
+      items: [createDocument('processing'), { ...createDocument('processing'), id: 'document-2', original_filename: 'second.txt' }],
+      total: 2, offset: 0, limit: 100,
+    }
+    mockedGetDocuments
+      .mockResolvedValueOnce(processing)
+      .mockResolvedValueOnce(structuredClone(processing))
+      .mockResolvedValueOnce(structuredClone(processing))
+      .mockResolvedValue({ ...processing, items: processing.items.map((item) => ({ ...item, status: terminalStatus })) })
+    const view = renderPanel()
+    try {
+      await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+      expect(screen.getAllByText('处理中')).toHaveLength(2)
+      for (let count = 2; count <= 4; count += 1) {
+        await act(async () => { await vi.advanceTimersByTimeAsync(3_010) })
+        expect(mockedGetDocuments).toHaveBeenCalledTimes(count)
+      }
+      expect(screen.getAllByText(terminalStatus === 'completed' ? '处理完成' : '处理失败')).toHaveLength(2)
+      await act(async () => { await vi.advanceTimersByTimeAsync(9_000) })
+      expect(mockedGetDocuments).toHaveBeenCalledTimes(4)
+    } finally {
+      view.unmount()
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops polling when the document panel unmounts', async () => {
+    vi.useFakeTimers()
+    mockedGetDocuments.mockResolvedValue({ items: [createDocument('processing')], total: 1, offset: 0, limit: 100 })
+    const view = renderPanel()
+    try {
+      await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+      expect(mockedGetDocuments).toHaveBeenCalledOnce()
+      view.unmount()
+      await act(async () => { await vi.advanceTimersByTimeAsync(9_000) })
+      expect(mockedGetDocuments).toHaveBeenCalledOnce()
+    } finally {
+      view.unmount()
+      vi.useRealTimers()
+    }
+  })
+
   it('explains batch upload and processing limits', async () => {
     mockedGetDocuments.mockResolvedValue({
       items: [],
@@ -386,8 +430,24 @@ describe('DocumentPanel', () => {
       'document-1',
     )
     expect(
-      await screen.findByText('失败任务已重新加入后台队列。'),
+      await screen.findByText('任务已重新加入后台队列。'),
     ).toBeInTheDocument()
+  })
+
+  it('confirms before requesting recovery of a stuck document', async () => {
+    const user = userEvent.setup()
+    const processing = createDocument('processing')
+    mockedGetDocuments.mockResolvedValue({ items: [processing], total: 1, offset: 0, limit: 100 })
+    mockedRetryDocumentProcessing.mockResolvedValue(processing)
+    const confirmation = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    renderPanel()
+    const button = await screen.findByRole('button', { name: '恢复处理' })
+    await user.click(button)
+    expect(mockedRetryDocumentProcessing).not.toHaveBeenCalled()
+    await user.click(button)
+    expect(mockedRetryDocumentProcessing).toHaveBeenCalledWith('knowledge-base-1', 'document-1')
+    expect(await screen.findByText('任务已重新加入后台队列。')).toBeInTheDocument()
+    confirmation.mockRestore()
   })
 
   it('deletes a document after confirmation', async () => {

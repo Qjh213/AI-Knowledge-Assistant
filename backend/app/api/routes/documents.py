@@ -185,7 +185,7 @@ def queue_document_processing(
     "/{document_id}/process/retry",
     response_model=DocumentResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Retry failed document processing in the background",
+    summary="Retry failed or resume inactive document processing in the background",
 )
 def retry_document_processing(
     knowledge_base_id: UUID,

@@ -3,13 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
+from time import sleep
 from typing import Any, Literal
 from zipfile import BadZipFile, ZipFile
 
 import httpx
 
 from app.core.config import settings
-from app.core.exceptions import MinerUServiceError
+from app.core.exceptions import MinerUServiceError, MinerUResultDownloadError
 
 
 MinerUTaskState = Literal[
@@ -201,25 +202,33 @@ class MinerUClient:
         if max_download_bytes <= 0 or max_markdown_bytes <= 0:
             raise MinerUServiceError("download size limits must be positive")
 
-        archive = bytearray()
-        try:
-            with self.download_client.stream(
-                "GET",
-                full_zip_url,
-            ) as response:
-                response.raise_for_status()
-                for chunk in response.iter_bytes():
-                    archive.extend(chunk)
-                    if len(archive) > max_download_bytes:
-                        raise MinerUServiceError(
-                            "result ZIP exceeded the download size limit"
-                        )
-        except MinerUServiceError:
-            raise
-        except httpx.HTTPError as exc:
-            raise MinerUServiceError(
-                f"result ZIP download failed: {exc}"
-            ) from exc
+        for attempt in range(3):
+            # Discard partial data before retrying a read-only download.
+            archive = bytearray()
+            try:
+                with self.download_client.stream("GET", full_zip_url) as response:
+                    response.raise_for_status()
+                    for chunk in response.iter_bytes():
+                        archive.extend(chunk)
+                        if len(archive) > max_download_bytes:
+                            raise MinerUServiceError(
+                                "result ZIP exceeded the download size limit"
+                            )
+                break
+            except httpx.HTTPError as exc:
+                if attempt < 2 and self._retryable_read_error(exc):
+                    sleep(2 ** attempt)
+                    continue
+                # Never expose signed URLs in the user-visible message.
+                reason = (
+                    f"HTTP {exc.response.status_code}"
+                    if isinstance(exc, httpx.HTTPStatusError)
+                    else type(exc).__name__
+                )
+                raise MinerUResultDownloadError(
+                    f"MinerU 已完成解析，但结果 ZIP 下载失败（{reason}，尝试 {attempt + 1} 次）。"
+                    "请检查下载站的网络或代理配置后重试。"
+                ) from exc
 
         try:
             with ZipFile(BytesIO(archive)) as result_zip:
@@ -262,17 +271,22 @@ class MinerUClient:
     ) -> dict[str, Any]:
         headers = dict(kwargs.pop("headers", {}))
         headers["Authorization"] = f"Bearer {self.api_token}"
-        try:
-            response = self.client.request(
-                method,
-                f"{self.base_url}{path}",
-                headers=headers,
-                **kwargs,
-            )
-            response.raise_for_status()
-            payload = response.json()
-        except (httpx.HTTPError, ValueError) as exc:
-            raise MinerUServiceError(f"API request failed: {exc}") from exc
+        attempts = 3 if method.upper() == "GET" else 1
+        for attempt in range(attempts):
+            try:
+                response = self.client.request(
+                    method, f"{self.base_url}{path}", headers=headers, **kwargs
+                )
+                response.raise_for_status()
+                payload = response.json()
+                break
+            except (httpx.HTTPError, ValueError) as exc:
+                if attempt < attempts - 1 and self._retryable_read_error(exc):
+                    sleep(2 ** attempt)
+                    continue
+                raise MinerUServiceError(
+                    f"API request failed ({type(exc).__name__}); check network and credentials"
+                ) from exc
 
         if not isinstance(payload, dict):
             raise MinerUServiceError("API response was not a JSON object")
@@ -283,6 +297,14 @@ class MinerUClient:
         if not isinstance(data, dict):
             raise MinerUServiceError("API response did not contain data")
         return data
+
+    @staticmethod
+    def _retryable_read_error(error: Exception) -> bool:
+        if isinstance(error, httpx.HTTPStatusError):
+            return error.response.status_code in {408, 429, 500, 502, 503, 504}
+        if "CERTIFICATE_VERIFY_FAILED" in str(error):
+            return False
+        return isinstance(error, httpx.TransportError)
 
     @staticmethod
     def _required_string(data: dict[str, Any], key: str) -> str:

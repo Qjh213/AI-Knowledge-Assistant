@@ -8,6 +8,7 @@ import pytest
 from app.core.exceptions import (
     DocumentProcessingError,
     MinerUServiceError,
+    MinerUResultDownloadError,
 )
 from app.database.models import (
     DocumentParser,
@@ -646,3 +647,29 @@ def test_finalize_returns_already_completed_document(
     assert result is document
     assert mineru_client.calls == []
     assert processing_service.calls == []
+
+
+def test_download_failure_keeps_remote_task_and_reports_download_stage(tmp_path, monkeypatch):
+    document = make_submitted_document()
+    session = FakeSession()
+    client = FakeMinerUFinalizationClient(
+        MinerUTaskResult(batch_id="batch-123", file_name="lesson.pdf", state="done", progress=100,
+                        full_zip_url="https://download.example/result.zip"), "unused",
+    )
+    def fail_download(url):
+        raise MinerUResultDownloadError("解析完成，但结果 ZIP 下载失败")
+    client.download_markdown = fail_download
+    patch_repository_updates(monkeypatch)
+    monkeypatch.setattr(DocumentRepository, "get", lambda *args: document)
+    monkeypatch.setattr("app.services.mineru_processing.DocumentChunkRepository.delete_for_document", lambda *args: None)
+    service = MinerUDocumentProcessingService(
+        mineru_client=client, document_service=FakeDocumentService(document),
+        storage_service=DocumentStorageService(storage_path=tmp_path),
+        processing_service=FakeProcessingService(),
+    )
+    with pytest.raises(DocumentProcessingError, match="结果 ZIP 下载失败"):
+        service.finalize(session, document.knowledge_base_id, document.id)
+    assert document.status == DocumentStatus.FAILED
+    assert document.processing_progress == 99
+    assert document.external_task_id == "batch-123"
+    assert document.last_processing_finished_at is not None
