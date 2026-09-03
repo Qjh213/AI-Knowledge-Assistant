@@ -11,7 +11,7 @@ from app.database.base import Base
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 config.set_main_option(
     "sqlalchemy.url",
@@ -37,6 +37,13 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    supplied_connection = config.attributes.get('connection')
+    if supplied_connection is not None:
+        # Used by isolated migration tests with a dedicated PostgreSQL schema.
+        context.configure(connection=supplied_connection, target_metadata=target_metadata, compare_type=True)
+        with context.begin_transaction():
+            context.run_migrations()
+        return
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

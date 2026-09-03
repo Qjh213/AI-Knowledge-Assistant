@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { getServiceConnection } from '../../api/health'
+import { useAuth } from '../../auth/AuthContext'
 
 const navigation = [
   { label: '知识库', to: '/knowledge-bases', icon: Database },
@@ -20,6 +21,8 @@ const navigation = [
 ]
 
 export function AppShell() {
+  const { user, signOut } = useAuth()
+  const [logoutError, setLogoutError] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const serviceQuery = useQuery({
     queryKey: ['service-connection'],
@@ -96,9 +99,13 @@ export function AppShell() {
               </NavLink>
             )
           })}
+          {user?.role === 'admin' && <NavLink to="/admin/users" onClick={() => setSidebarOpen(false)} className="block rounded-xl px-3 py-2.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50">账号管理</NavLink>}
         </nav>
 
         <div className="border-t border-slate-100 p-4">
+          <p className="px-3 text-sm font-medium">{user?.username} <span className="text-xs text-slate-500">{user?.role === 'admin' ? '管理员' : '用户'}</span></p>
+          <div className="flex gap-4 px-3 py-3 text-xs text-slate-600"><NavLink to="/change-password">修改密码</NavLink><button onClick={() => { void signOut().catch(() => setLogoutError('退出失败，请重试。')) }}>退出登录</button></div>
+          {logoutError && <p role="alert" className="px-3 text-xs text-rose-600">{logoutError}</p>}
           <div className="flex items-center gap-2 px-3 py-2 text-xs text-slate-500">
             <span className={`size-2 rounded-full ${statusColor}`} />
             {connection.label}

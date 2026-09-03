@@ -75,7 +75,7 @@ class DocumentStorageService:
 
                     if file_size > self.max_size_bytes:
                         raise DocumentTooLargeError(
-                            settings.max_upload_size_mb
+                            round(self.max_size_bytes / (1024 * 1024), 6)
                         )
 
                     checksum.update(chunk)

@@ -95,6 +95,7 @@ services:
       CORS_ORIGINS: '["http://localhost:${APP_PORT:-8080}"]'
       TRUSTED_HOSTS: '["localhost","127.0.0.1","backend"]'
       RATE_LIMIT_ENABLED: "true"
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
       RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-120}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
       DATABASE_URL: postgresql+psycopg2://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env}@postgres:5432/knowledge

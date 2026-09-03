@@ -98,7 +98,7 @@ def test_knowledge_base_crud_flow() -> None:
             )
 
 
-def test_knowledge_base_name_validation() -> None:
+def test_knowledge_base_name_validation(api_service_session) -> None:
     response = client.post(
         "/api/v1/knowledge-bases",
         json={"name": "   "},
@@ -107,7 +107,7 @@ def test_knowledge_base_name_validation() -> None:
     assert response.status_code == 422
 
 
-def test_knowledge_base_pagination_validation() -> None:
+def test_knowledge_base_pagination_validation(api_service_session) -> None:
     response = client.get(
         "/api/v1/knowledge-bases",
         params={"offset": -1, "limit": 101},

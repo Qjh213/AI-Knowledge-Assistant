@@ -42,7 +42,7 @@ class UnsupportedDocumentTypeError(Exception):
 
 
 class DocumentTooLargeError(Exception):
-    def __init__(self, max_size_mb: int) -> None:
+    def __init__(self, max_size_mb: int | float) -> None:
         self.max_size_mb = max_size_mb
         super().__init__(
             f"Document exceeds the maximum size of {max_size_mb} MB"

@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import UploadFile
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,7 @@ from app.repositories.document import DocumentRepository
 from app.services.document_storage import DocumentStorageService
 from app.services.knowledge_base import KnowledgeBaseService
 from app.services.vector_store import VectorStoreService
+from app.services.quotas import upload_budget
 
 
 class DocumentService:
@@ -37,7 +39,16 @@ class DocumentService:
             knowledge_base_id,
         )
 
-        stored = await self.storage_service.store(upload)
+        # Competing uploads must wait for the user row lock off the event loop.
+        budget = await run_in_threadpool(upload_budget, session)
+        storage = self.storage_service
+        if budget is not None:
+            storage = DocumentStorageService(
+                storage_path=storage.storage_path,
+                max_size_bytes=min(storage.max_size_bytes, budget),
+                allowed_extensions=tuple(storage.allowed_extensions),
+            )
+        stored = await storage.store(upload)
 
         existing = DocumentRepository.get_by_checksum(
             session,

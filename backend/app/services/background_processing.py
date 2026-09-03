@@ -10,12 +10,14 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.exceptions import DocumentRetryNotAllowedError
-from app.database.models import Document, DocumentParser, DocumentStatus
+from app.database.models import Document, DocumentParser, DocumentStatus, KnowledgeBase
+from app.database.tenant import scope_session
 from app.database.session import SessionLocal
 from app.repositories.document import DocumentRepository
 from app.services.document import DocumentService
 from app.services.document_processing import DocumentProcessingService
 from app.services.mineru_processing import MinerUDocumentProcessingService
+from app.services.quotas import reserve_ai_request
 
 
 logger = logging.getLogger(__name__)
@@ -72,6 +74,13 @@ class BackgroundDocumentProcessor:
 
         attempt = document.processing_attempts
         try:
+            reserve_ai_request(session, processing_document_id=document_id, active_document_ids=self._active_ids)
+        except Exception:
+            session.rollback()
+            with self._lock:
+                self._inflight.discard(document_id)
+            raise
+        try:
             # A processing row with no in-memory worker is a recoverable task
             # in this single-process deployment. Preserve its remote task.
             if document.parser != parser:
@@ -107,6 +116,10 @@ class BackgroundDocumentProcessor:
     ) -> None:
         try:
             with SessionLocal() as session:
+                if isinstance(session, Session):
+                    knowledge_base = session.get(KnowledgeBase, knowledge_base_id)
+                    if knowledge_base is not None:
+                        scope_session(session, knowledge_base.owner_id)
                 if parser == DocumentParser.LOCAL:
                     DocumentProcessingService().process(
                         session,
@@ -126,6 +139,10 @@ class BackgroundDocumentProcessor:
         finally:
             with self._lock:
                 self._inflight.discard(document_id)
+
+    def _active_ids(self):
+        with self._lock:
+            return tuple(self._inflight)
 
     @staticmethod
     def _record_failure(

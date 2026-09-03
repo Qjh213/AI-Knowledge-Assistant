@@ -1,10 +1,11 @@
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import String, Text, Uuid
+from sqlalchemy import ForeignKey, String, Text, Uuid, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base, TimestampMixin
+from app.database.models.user import LEGACY_ADMIN_ID
 
 if TYPE_CHECKING:
     from app.database.models.document import Document
@@ -13,6 +14,12 @@ if TYPE_CHECKING:
 
 class KnowledgeBase(TimestampMixin, Base):
     __tablename__ = "knowledge_bases"
+    __table_args__ = (UniqueConstraint('owner_id', 'name', name='uq_knowledge_bases_owner_name'),)
+
+    owner_id: Mapped[UUID] = mapped_column(
+        ForeignKey('users.id', ondelete='RESTRICT'), nullable=False,
+        index=True, default=lambda: LEGACY_ADMIN_ID,
+    )
 
     id: Mapped[UUID] = mapped_column(
         Uuid,
@@ -21,7 +28,6 @@ class KnowledgeBase(TimestampMixin, Base):
     )
     name: Mapped[str] = mapped_column(
         String(100),
-        unique=True,
         index=True,
         nullable=False,
     )

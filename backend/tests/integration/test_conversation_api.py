@@ -132,7 +132,7 @@ def test_conversation_crud_flow_and_knowledge_base_scope() -> None:
             )
 
 
-def test_conversation_title_validation() -> None:
+def test_conversation_title_validation(api_service_session) -> None:
     response = client.post(
         f"/api/v1/knowledge-bases/{uuid4()}/conversations",
         json={"title": "   "},
@@ -141,7 +141,7 @@ def test_conversation_title_validation() -> None:
     assert response.status_code == 422
 
 
-def test_conversation_pagination_validation() -> None:
+def test_conversation_pagination_validation(api_service_session) -> None:
     response = client.get(
         f"/api/v1/knowledge-bases/{uuid4()}/conversations",
         params={"offset": -1, "limit": 101},

@@ -1,6 +1,7 @@
 from uuid import UUID, uuid4
 
 import pytest
+pytestmark = pytest.mark.usefixtures('api_service_session')
 from fastapi.testclient import TestClient
 
 from app.api.routes import knowledge_bases as knowledge_base_routes

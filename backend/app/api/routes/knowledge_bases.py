@@ -17,6 +17,7 @@ from app.schemas.retrieval import (
 )
 from app.services.retrieval import RetrievalService
 from app.services.knowledge_base import KnowledgeBaseService
+from app.services.quotas import charge_ai_request
 
 from app.schemas.rag import (
     RagAnswerResponse,
@@ -117,6 +118,7 @@ def search_knowledge_base(
     session: SessionDependency,
     retrieval_service: RetrievalServiceDependency,
 ) -> RetrievalResponse:
+    charge_ai_request(session)
     return retrieval_service.search(
         session,
         knowledge_base_id,
@@ -134,6 +136,7 @@ def answer_from_knowledge_base(
     session: SessionDependency,
     rag_service: RagServiceDependency,
 ) -> RagAnswerResponse:
+    charge_ai_request(session)
     return rag_service.answer(
         session,
         knowledge_base_id,

@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = False
     rate_limit_requests: int = Field(default=120, ge=1, le=10_000)
     rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
+    # Local HTTP/SSH tunnel only. Set true before using a public HTTPS endpoint.
+    auth_cookie_secure: bool = False
 
     database_url: str = (
         "postgresql+psycopg2://postgres:postgres@localhost:5432/knowledge"

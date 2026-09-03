@@ -27,6 +27,7 @@ def create_application() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Password-Change-Required"],
     )
     application.add_middleware(
         TrustedHostMiddleware,

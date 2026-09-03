@@ -32,9 +32,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
-        except Exception:
-            logger.exception(
-                "Unhandled request error",
+        except Exception as exc:
+            logger.error(
+                "Unhandled request error type=%s", type(exc).__name__,
                 extra=self._log_fields(request, request_id, 500, started_at),
             )
             raise

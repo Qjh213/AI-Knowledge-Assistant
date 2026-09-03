@@ -3,6 +3,9 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
+import pytest
+
+pytestmark = pytest.mark.usefixtures('api_service_session')
 
 from app.api.routes import documents as documents_route
 from app.core.exceptions import (

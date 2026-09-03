@@ -23,6 +23,7 @@ from app.services.conversation_message import (
 )
 from app.services.conversation import ConversationService
 from app.services.sse import encode_sse
+from app.services.quotas import charge_ai_request
 
 
 router = APIRouter(
@@ -154,6 +155,7 @@ def send_message(
     session: SessionDependency,
     message_service: ConversationMessageServiceDependency,
 ) -> MessageTurnResponse:
+    charge_ai_request(session)
     user_message, assistant_message = message_service.send(
         session,
         knowledge_base_id,
@@ -181,6 +183,7 @@ def stream_message(
     session: SessionDependency,
     message_service: ConversationMessageServiceDependency,
 ) -> StreamingResponse:
+    charge_ai_request(session)
     events = message_service.stream(
         session,
         knowledge_base_id,

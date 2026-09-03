@@ -1,4 +1,4 @@
-import { API_BASE_URL, ApiError, apiRequest } from '../lib/apiClient'
+import { API_BASE_URL, ApiError, apiRequest, authenticatedHeaders, notifyAuthError } from '../lib/apiClient'
 import type {
   Conversation,
   ConversationListResponse,
@@ -144,13 +144,15 @@ export async function streamMessage(
     `${API_BASE_URL}${conversationsPath(knowledgeBaseId)}/${conversationId}/messages/stream`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authenticatedHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include',
       body: JSON.stringify(data),
       signal,
     },
   )
 
   if (!response.ok) {
+    notifyAuthError(response)
     let detail = `请求失败（HTTP ${response.status}）`
 
     try {

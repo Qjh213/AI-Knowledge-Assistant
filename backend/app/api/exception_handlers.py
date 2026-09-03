@@ -2,6 +2,7 @@ import logging
 
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 
 from app.core.exceptions import (
     DocumentAlreadyExistsError,
@@ -198,9 +199,8 @@ async def unhandled_exception_handler(
     exc: Exception,
 ) -> JSONResponse:
     request_id = getattr(request.state, "request_id", "unknown")
-    logger.exception(
-        "Unhandled application exception",
-        exc_info=exc,
+    logger.error(
+        "Unhandled application exception type=%s", type(exc).__name__,
         extra={"request_id": request_id},
     )
     return JSONResponse(
@@ -214,6 +214,13 @@ async def unhandled_exception_handler(
 
 
 def register_exception_handlers(application: FastAPI) -> None:
+    async def validation_error(request: Request, exc: RequestValidationError):
+        # Pydantic's default response echoes input, including password fields.
+        if '/auth/' in request.url.path or '/admin/' in request.url.path:
+            return JSONResponse(status_code=422, content={'detail': '输入格式不正确：用户名需为 3–32 位小写字母、数字或 ._-；新密码需为 12–128 个字符；请检查额度范围。'})
+        return JSONResponse(status_code=422, content={'detail': '请求参数格式不正确。'})
+
+    application.add_exception_handler(RequestValidationError, validation_error)
     application.add_exception_handler(
         KnowledgeBaseNotFoundError,
         knowledge_base_not_found_handler,
