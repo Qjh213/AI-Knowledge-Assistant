@@ -9,6 +9,7 @@ from app.services.rag import (
     NO_CONTEXT_ANSWER,
     SYSTEM_PROMPT,
     RagService,
+    select_context_results,
 )
 
 
@@ -138,7 +139,7 @@ def test_rag_generates_answer_with_numbered_citations():
     assert retrieval_service.received_request.query == (
         "Milvus 有什么作用？"
     )
-    assert retrieval_service.received_request.limit == 8
+    assert retrieval_service.received_request.limit == 16
     assert retrieval_service.received_request.min_score == 0.4
 
     assert chat_service.called is True
@@ -164,6 +165,38 @@ def test_rag_generates_answer_with_numbered_citations():
         response.citations[0].original_filename
         == "milvus-guide.txt"
     )
+
+
+def test_context_selection_removes_duplicates_and_limits_one_document():
+    shared_document_id = uuid4()
+    results = [
+        create_retrieval_result(
+            content=f"同一文档中的不同内容 {index}",
+            filename="primary.pdf",
+            page_number=index,
+            score=0.9 - index / 100,
+        ).model_copy(update={"document_id": shared_document_id})
+        for index in range(4)
+    ]
+    duplicate = results[0].model_copy(update={"chunk_id": uuid4()})
+    diverse = create_retrieval_result(
+        content="另一个来源提供补充证据。",
+        filename="secondary.pdf",
+        page_number=1,
+        score=0.7,
+    )
+
+    selected = select_context_results(
+        [results[0], duplicate, *results[1:], diverse],
+        limit=5,
+    )
+
+    assert duplicate not in selected
+    assert sum(
+        item.document_id == shared_document_id
+        for item in selected
+    ) == 3
+    assert diverse in selected
 
 
 def test_rag_skips_chat_when_context_is_empty():

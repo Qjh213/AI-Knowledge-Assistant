@@ -1,3 +1,6 @@
+import re
+import unicodedata
+from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass
 from uuid import UUID
@@ -10,6 +13,7 @@ from app.schemas.rag import (
     RagQuestionRequest,
 )
 from app.schemas.retrieval import RetrievalRequest
+from app.schemas.retrieval import RetrievalResult
 from app.services.chat import ChatService
 from app.services.knowledge_base_metadata import KnowledgeBaseMetadataService
 from app.services.retrieval import RetrievalService
@@ -25,11 +29,74 @@ SYSTEM_PROMPT = """
 4. 引用事实时使用 [1]、[2] 这样的编号标注来源。
 5. 如果上下文不足以回答，明确说明“无法从当前知识库中确认”。
 6. 回答使用与用户问题相同的语言。
+7. 先识别问题包含的全部要点，再逐项作答，不要遗漏上下文中已有的直接证据。
+8. 只引用实际支撑答案的来源，不要为了增加引用数量罗列无关内容。
 """.strip()
 
 NO_CONTEXT_ANSWER = (
     "无法从当前知识库中确认这个问题的答案。"
 )
+
+_MAX_CHUNKS_PER_DOCUMENT = 3
+_DUPLICATE_SIMILARITY_THRESHOLD = 0.82
+_NORMALIZED_TEXT_PATTERN = re.compile(r"[a-z0-9_\u3400-\u9fff]+")
+
+
+def _text_shingles(text: str, size: int = 3) -> set[str]:
+    normalized = "".join(
+        _NORMALIZED_TEXT_PATTERN.findall(
+            unicodedata.normalize("NFKC", text).casefold()
+        )
+    )
+    return {
+        normalized[index:index + size]
+        for index in range(max(0, len(normalized) - size + 1))
+    }
+
+
+def _is_near_duplicate(
+    candidate: RetrievalResult,
+    selected: list[RetrievalResult],
+) -> bool:
+    candidate_shingles = _text_shingles(candidate.content)
+    if not candidate_shingles:
+        return any(
+            candidate.content.strip() == result.content.strip()
+            for result in selected
+        )
+
+    for result in selected:
+        existing_shingles = _text_shingles(result.content)
+        union = candidate_shingles | existing_shingles
+        if union and (
+            len(candidate_shingles & existing_shingles) / len(union)
+            >= _DUPLICATE_SIMILARITY_THRESHOLD
+        ):
+            return True
+
+    return False
+
+
+def select_context_results(
+    results: list[RetrievalResult],
+    limit: int,
+) -> list[RetrievalResult]:
+    """Select diverse, non-duplicate context while preserving rank order."""
+    selected: list[RetrievalResult] = []
+    document_counts: Counter[UUID] = Counter()
+
+    for result in results:
+        if len(selected) >= limit:
+            break
+        if document_counts[result.document_id] >= _MAX_CHUNKS_PER_DOCUMENT:
+            continue
+        if _is_near_duplicate(result, selected):
+            continue
+
+        selected.append(result)
+        document_counts[result.document_id] += 1
+
+    return selected
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,11 +177,15 @@ class RagService:
             knowledge_base_id,
             RetrievalRequest(
                 query=request.question,
-                limit=request.retrieval_limit,
+                limit=min(20, request.retrieval_limit * 2),
                 min_score=request.min_score,
             ),
         )
 
+        context_results = select_context_results(
+            retrieval_response.results,
+            request.retrieval_limit,
+        )
         citations = [
             RagCitation(
                 reference=index,
@@ -125,10 +196,7 @@ class RagService:
                 content=result.content,
                 score=result.score,
             )
-            for index, result in enumerate(
-                retrieval_response.results,
-                start=1,
-            )
+            for index, result in enumerate(context_results, start=1)
         ]
 
         if not citations:
@@ -216,6 +284,7 @@ class RagService:
                 "",
                 f"问题：{question}",
                 "",
-                "请给出简洁、准确且带引用编号的回答。",
+                "请先确认问题包含哪些要点，并在上下文有依据时逐项覆盖。",
+                "请给出简洁、准确的回答，仅在对应事实后标注实际使用的引用编号。",
             ]
         )

@@ -1,9 +1,11 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
+from math import sqrt
+import re
 from typing import Any
 from uuid import UUID
 
-from pymilvus import DataType, MilvusClient
+from pymilvus import DataType, Function, FunctionType, MilvusClient
 
 from app.core.config import settings
 from app.core.exceptions import VectorStoreError
@@ -36,6 +38,7 @@ class VectorStoreService:
         self.collection_name = (
             collection_name or settings.milvus_collection_name
         )
+        self.lexical_collection_name = f"{self.collection_name}_lexical"
         self.dimension = (
             dimension
             if dimension is not None
@@ -129,6 +132,57 @@ class VectorStoreService:
         except Exception as exc:
             raise VectorStoreError(str(exc)) from exc
 
+    def ensure_lexical_collection(self) -> None:
+        try:
+            if self.client.has_collection(self.lexical_collection_name):
+                return
+            schema = MilvusClient.create_schema(
+                auto_id=False,
+                enable_dynamic_field=False,
+            )
+            schema.add_field("id", DataType.VARCHAR, is_primary=True, max_length=36)
+            schema.add_field("knowledge_base_id", DataType.VARCHAR, max_length=36)
+            schema.add_field("document_id", DataType.VARCHAR, max_length=36)
+            schema.add_field("chunk_index", DataType.INT64)
+            schema.add_field(
+                "content",
+                DataType.VARCHAR,
+                max_length=8192,
+                enable_analyzer=True,
+            )
+            schema.add_field("page_number", DataType.INT64, nullable=True)
+            schema.add_field("token_count", DataType.INT64, nullable=True)
+            schema.add_field("metadata", DataType.JSON)
+            schema.add_field("sparse", DataType.SPARSE_FLOAT_VECTOR)
+            schema.add_function(Function(
+                name="content_bm25",
+                input_field_names=["content"],
+                output_field_names=["sparse"],
+                function_type=FunctionType.BM25,
+            ))
+            indexes = MilvusClient.prepare_index_params()
+            indexes.add_index(
+                field_name="sparse",
+                index_type="SPARSE_INVERTED_INDEX",
+                metric_type="BM25",
+                params={"inverted_index_algo": "DAAT_MAXSCORE"},
+            )
+            self.client.create_collection(
+                collection_name=self.lexical_collection_name,
+                schema=schema,
+                index_params=indexes,
+                consistency_level="Strong",
+            )
+        except Exception as exc:
+            raise VectorStoreError(str(exc)) from exc
+
+    @staticmethod
+    def _lexical_records(records: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [
+            {key: value for key, value in record.items() if key != "embedding"}
+            for record in records
+        ]
+
     def insert_chunks(
         self,
         knowledge_base_id: UUID,
@@ -183,6 +237,11 @@ class VectorStoreService:
                 collection_name=self.collection_name,
                 data=records,
             )
+            self.ensure_lexical_collection()
+            self.client.upsert(
+                collection_name=self.lexical_collection_name,
+                data=self._lexical_records(records),
+            )
         except VectorStoreError:
             raise
         except Exception as exc:
@@ -208,6 +267,11 @@ class VectorStoreService:
                 collection_name=self.collection_name,
                 filter=f'document_id == "{document_id}"',
             )
+            if self.client.has_collection(self.lexical_collection_name):
+                self.client.delete(
+                    collection_name=self.lexical_collection_name,
+                    filter=f'document_id == "{document_id}"',
+                )
         except VectorStoreError:
             raise
         except Exception as exc:
@@ -228,6 +292,11 @@ class VectorStoreService:
                     f'knowledge_base_id == "{knowledge_base_id}"'
                 ),
             )
+            if self.client.has_collection(self.lexical_collection_name):
+                self.client.delete(
+                    collection_name=self.lexical_collection_name,
+                    filter=f'knowledge_base_id == "{knowledge_base_id}"',
+                )
         except VectorStoreError:
             raise
         except Exception as exc:
@@ -310,6 +379,80 @@ class VectorStoreService:
             )
 
         return results
+
+    def search_lexical(
+        self,
+        knowledge_base_id: UUID,
+        query: str,
+        query_vector: Sequence[float],
+        limit: int = 20,
+    ) -> list[VectorSearchResult]:
+        if not query.strip() or limit <= 0:
+            return []
+        ascii_terms = re.findall(r"[A-Za-z][A-Za-z0-9_]{2,}", query)
+        variants = []
+        for term in ascii_terms:
+            variants.append(term[:-1] if term.lower().endswith("s") else f"{term}s")
+        lexical_query = " ".join([query.strip(), *variants])
+        try:
+            self.ensure_lexical_collection()
+            search_results = self.client.search(
+                collection_name=self.lexical_collection_name,
+                data=[lexical_query],
+                filter=f'knowledge_base_id == "{knowledge_base_id}"',
+                anns_field="sparse",
+                limit=limit,
+                output_fields=[
+                    "knowledge_base_id", "document_id", "chunk_index",
+                    "content", "page_number", "token_count", "metadata",
+                ],
+                search_params={"metric_type": "BM25", "params": {}},
+            )
+        except Exception as exc:
+            raise VectorStoreError(str(exc)) from exc
+        if not search_results:
+            return []
+        hits = list(search_results[0])
+        if not hits:
+            return []
+        identifiers = [str(hit["id"]) for hit in hits]
+        quoted_ids = ", ".join(f'"{identifier}"' for identifier in identifiers)
+        dense_rows = self.client.query(
+            collection_name=self.collection_name,
+            filter=f"id in [{quoted_ids}]",
+            output_fields=["id", "embedding"],
+            limit=len(identifiers),
+        )
+        embeddings = {
+            str(row["id"]): row["embedding"]
+            for row in dense_rows
+        }
+        query_norm = sqrt(sum(value * value for value in query_vector)) or 1.0
+
+        def cosine_score(hit) -> float:
+            vector = embeddings.get(str(hit["id"]))
+            if not vector:
+                return -1.0
+            vector_norm = sqrt(sum(value * value for value in vector)) or 1.0
+            return sum(
+                left * right
+                for left, right in zip(query_vector, vector, strict=True)
+            ) / (query_norm * vector_norm)
+
+        return [
+            VectorSearchResult(
+                chunk_id=UUID(str(hit["id"])),
+                knowledge_base_id=UUID(str(hit["entity"]["knowledge_base_id"])),
+                document_id=UUID(str(hit["entity"]["document_id"])),
+                chunk_index=int(hit["entity"]["chunk_index"]),
+                content=str(hit["entity"]["content"]),
+                page_number=hit["entity"].get("page_number"),
+                token_count=hit["entity"].get("token_count"),
+                metadata=dict(hit["entity"].get("metadata") or {}),
+                score=cosine_score(hit),
+            )
+            for hit in hits
+        ]
 
     def _validate_existing_collection(self) -> None:
         description = self.client.describe_collection(

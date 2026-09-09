@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"
     volumes:
       - ./volumes/postgres:/var/lib/postgresql/data
     healthcheck:
@@ -106,6 +106,9 @@ services:
       CHAT_MODEL: ${CHAT_MODEL:-deepseek-v4-flash}
       SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
       SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://api.siliconflow.cn/v1}
+      RERANKER_ENABLED: ${RERANKER_ENABLED:-true}
+      RERANKER_MODEL: ${RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
+      RERANKER_CANDIDATE_LIMIT: ${RERANKER_CANDIDATE_LIMIT:-20}
       MINERU_API_TOKEN: ${MINERU_API_TOKEN:-}
       MINERU_BASE_URL: ${MINERU_BASE_URL:-https://mineru.net/api/v4}
       DOCUMENT_STORAGE_PATH: /app/data/documents

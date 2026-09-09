@@ -65,6 +65,8 @@ docker exec -it aka-backend python -m app.bootstrap_admin --reset
 
 ## 测试
 
+本机 PostgreSQL 默认发布到 `127.0.0.1:55432`，避免与已安装的 PostgreSQL 占用 `5432` 冲突；容器之间仍通过 `postgres:5432` 通信。运行宿主机测试时，`backend/.env` 中的 `DATABASE_URL` 端口应与 `POSTGRES_HOST_PORT` 一致。
+
 后端单元/隔离 API 测试：`python -m pytest -m "not integration"`。
 PostgreSQL 迁移与并发测试：`python -m pytest tests/integration/test_auth_postgres.py`；它仅创建并清理随机命名的独立 schema，不操作业务 schema。
 完整回归：`python -m pytest`；原有业务集成测试也使用独立 schema、测试文件目录和临时向量集合，需本机 PostgreSQL 与 Milvus 可用。

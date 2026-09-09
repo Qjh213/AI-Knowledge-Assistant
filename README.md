@@ -6,7 +6,7 @@
 
 - 前端：React、TypeScript、Vite、TanStack Query、Tailwind CSS
 - 后端：FastAPI、SQLAlchemy、Alembic、PostgreSQL
-- 检索：Milvus、BAAI/bge-m3（硅基流动）
+- 检索：Milvus 稠密向量 + 原生 BM25、RRF、BAAI/bge-reranker-v2-m3
 - 对话：DeepSeek
 - 文档解析：本地解析器或 MinerU API
 - 部署：Docker Compose、Nginx
@@ -89,6 +89,14 @@ docker compose `
 ```powershell
 .\docker\smoke-test.ps1
 ```
+
+从旧版本升级且 Milvus 已有文档时，还需幂等回填 BM25 旁路索引：
+
+```powershell
+docker exec aka-backend python -m app.backfill_lexical
+```
+
+看到 `Lexical index ready` 且 dense/lexical 数量一致后，混合检索才算就绪。新上传文档会自动同步写入两套索引。详细步骤见 `docker/RETRIEVAL_UPGRADE.md`。
 
 生产模式默认关闭 Swagger 和 ReDoc，只通过 Nginx 暴露前端的 `8080` 端口。
 

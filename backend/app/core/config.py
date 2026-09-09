@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-m3"
     embedding_dimension: int = 1024
     embedding_batch_size: int = 32
+    reranker_enabled: bool = True
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    reranker_candidate_limit: int = Field(default=20, ge=5, le=100)
 
     siliconflow_api_key: SecretStr = SecretStr("")
     siliconflow_base_url: str = "https://api.siliconflow.cn/v1"

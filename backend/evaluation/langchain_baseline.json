@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "name": "langchain-course-2026-baseline-v1",
+  "description": "Small human-authored baseline grounded in ten supplied LangChain course PDFs.",
+  "source_documents": [
+    {"filename": "尚硅谷-01-LangChain概述.pdf", "sha256": "1032fe14af5b486d73e1b0055dc4c59550e2b5bad925a1980d97b899ae831dde"},
+    {"filename": "尚硅谷-02-模型的创建与调用.pdf", "sha256": "e6924d5535c8d5da52f0b42e77ea4e4cfa934ea14811dbd5bb47753e828dc0a0"},
+    {"filename": "尚硅谷-03-LangSmith的使用.pdf", "sha256": "312a2863fc0f72b6c8f420b31aeb7deffd996c2b1f80447655cebbe5d1131aea"},
+    {"filename": "尚硅谷-04-Message与提示词模板.pdf", "sha256": "d1230015325959b054a878799f862410b3b4a479b73c8e05705cbca7b8e39b8a"},
+    {"filename": "尚硅谷-05-Tools.pdf", "sha256": "3601bcbb54cad2ca7f18ff32d26eb6ae755eb4be78cec1d6ebd5e2e606297c42"},
+    {"filename": "尚硅谷-06-结构化输出.pdf", "sha256": "9417d2d2297e8effa5157f79c2ff003eb8bc801c247ed7448d596637f474966b"},
+    {"filename": "尚硅谷-07-智能体.pdf", "sha256": "aeb5d018d580b0b53c7f0c6e92b5cc17dfc84bf26a7e1b1af3841096da6d3837"},
+    {"filename": "尚硅谷-08-中间件.pdf", "sha256": "a4cec64d4df83ea06e2257328ad1e89863f27685dec47745bfdf53eed145fc69"},
+    {"filename": "尚硅谷-09-上下文与记忆.pdf", "sha256": "3d1bbdc40e80bb2bfda93d86f18ebe6e6f864cd5678003cbea48202ca6ca5d72"},
+    {"filename": "尚硅谷-10-RAG.pdf", "sha256": "80c0a8593b110631cc747bca468445a6d3cc793599e092ba5bbc49a81ed171b5"}
+  ],
+  "cases": [
+    {"id":"lc01-position","kind":"answerable","question":"LangChain 在大模型应用中承担什么定位？请概括三项核心作用。","expected_sources":["尚硅谷-01-LangChain概述.pdf"],"reference_pages":[2],"reference_answer":"LangChain 是大模型与应用之间的中间层，用于连接外部资源、封装工具调用与记忆等复杂逻辑，并支撑多智能体协作。","answer_key_groups":[["中间层"],["外部资源","数据库","检索引擎","API"],["封装","复杂逻辑"],["多智能体"]]},
+    {"id":"lc01-rag-purpose","kind":"answerable","question":"课件认为 RAG 主要缓解大模型的哪些问题？","expected_sources":["尚硅谷-01-LangChain概述.pdf"],"reference_pages":[2],"reference_answer":"RAG 通过检索外部知识库，让模型基于更新且相关的资料回答，从而缓解知识滞后和幻觉。","answer_key_groups":[["知识滞后","实时数据"],["幻觉"],["外部知识库","外部资料"]]},
+    {"id":"lc02-invocation","kind":"answerable","question":"LangChain 的 invoke、stream 和 batch 分别适合什么调用场景？","expected_sources":["尚硅谷-02-模型的创建与调用.pdf"],"reference_pages":[25],"reference_answer":"invoke 阻塞并一次返回完整结果；stream 逐片段流式返回；batch 用于批量处理多个输入。","answer_key_groups":[["invoke","阻塞"],["stream","流式"],["batch","批量"]]},
+    {"id":"lc02-temperature","kind":"answerable","question":"temperature 参数控制什么？课件建议准确性任务采用什么范围？","expected_sources":["尚硅谷-02-模型的创建与调用.pdf"],"reference_pages":[15],"reference_answer":"temperature 控制输出随机性；需要一致性和准确性的任务建议使用 0.0 到 0.3。","answer_key_groups":[["随机性"],["0.0-0.3","0.0 到 0.3","0-0.3"],["准确","一致"]]},
+    {"id":"lc03-tracing","kind":"answerable","question":"LangSmith 的 Tracing 可以记录和查看哪些信息？","expected_sources":["尚硅谷-03-LangSmith的使用.pdf"],"reference_pages":[1],"reference_answer":"Tracing 记录完整调用链，可查看 Prompt、模型返回、Token 消耗以及各节点耗时。","answer_key_groups":[["调用链","Trace"],["Prompt","提示词"],["Token"],["耗时","延迟"]]},
+    {"id":"lc03-monitoring","kind":"answerable","question":"LangSmith 的 Monitoring 看板可观察哪些运行指标？","expected_sources":["尚硅谷-03-LangSmith的使用.pdf"],"reference_pages":[1],"reference_answer":"可观察 Token 消耗趋势、QPS、错误率、平均延迟和成本预估。","answer_key_groups":[["Token"],["QPS"],["错误率"],["延迟"],["成本"]]},
+    {"id":"lc04-messages","kind":"answerable","question":"SystemMessage、HumanMessage、AIMessage 和 ToolMessage 各代表什么？","expected_sources":["尚硅谷-04-Message与提示词模板.pdf"],"reference_pages":[3,4],"reference_answer":"它们分别表示系统规则、用户输入、AI 回复和工具执行结果。","answer_key_groups":[["系统","规则","角色"],["用户输入","用户消息"],["AI 回复","助手回复"],["工具执行结果","工具结果"]]},
+    {"id":"lc04-template","kind":"answerable","question":"相较直接拼接字符串，课件为什么推荐提示词模板？","expected_sources":["尚硅谷-04-Message与提示词模板.pdf"],"reference_pages":[26],"reference_answer":"模板改善可读性和维护性，支持变量校验，也更适合多轮对话、RAG 和 Few-shot 等复杂场景。","answer_key_groups":[["可读"],["维护"],["变量校验"],["多轮","RAG","Few-shot"]]},
+    {"id":"lc05-tool-use","kind":"answerable","question":"课件介绍了哪两种工具调用方式，各适合什么场景？","expected_sources":["尚硅谷-05-Tools.pdf"],"reference_pages":[2],"reference_answer":"可以直接调用工具用于测试，也可以将工具绑定到模型，让 AI 在开发场景中决定是否调用。","answer_key_groups":[["直接调用"],["测试"],["绑定","模型"],["AI","决定"]]},
+    {"id":"lc05-docstring","kind":"answerable","question":"LangChain 如何从 Python 函数生成工具描述，docstring 有什么要求？","expected_sources":["尚硅谷-05-Tools.pdf"],"reference_pages":[10,11,12],"reference_answer":"它基于函数定义、类型注解和 docstring 生成工具模式；参数说明应采用 Google 风格 docstring，相关参数需要类型注解。","answer_key_groups":[["函数定义","类型注解"],["docstring"],["Google"],["参数","类型注解"]]},
+    {"id":"lc06-benefits","kind":"answerable","question":"with_structured_output 带来了哪些主要好处？","expected_sources":["尚硅谷-06-结构化输出.pdf"],"reference_pages":[2],"reference_answer":"它让字段描述进入提示信息，提供类型安全，并利用模型厂商的 JSON 模式提升输出稳定性。","answer_key_groups":[["字段","description","提示"],["类型安全"],["JSON"],["稳定"]]},
+    {"id":"lc06-schema","kind":"answerable","question":"LangChain 1.x 的结构化输出支持哪些 Schema 形式？","expected_sources":["尚硅谷-06-结构化输出.pdf"],"reference_pages":[2],"reference_answer":"支持 Pydantic、TypedDict、JSON Schema 和 dataclass。","answer_key_groups":[["Pydantic"],["TypedDict"],["JSON Schema"],["dataclass"]]},
+    {"id":"lc07-agent","kind":"answerable","question":"课件如何定义 Agent，它通常结合哪些能力？","expected_sources":["尚硅谷-07-智能体.pdf"],"reference_pages":[1],"reference_answer":"Agent 以大语言模型为推理与决策核心，结合记忆、工具调用和环境交互，规划并执行任务。","answer_key_groups":[["大语言模型","LLM"],["推理","决策"],["记忆"],["工具"],["环境交互"]]},
+    {"id":"lc07-create","kind":"answerable","question":"LangChain 1.x 统一使用什么入口创建智能体，底层基于什么实现？","expected_sources":["尚硅谷-07-智能体.pdf"],"reference_pages":[3,4],"reference_answer":"统一使用 create_agent 创建智能体，底层基于 LangGraph。","answer_key_groups":[["create_agent"],["LangGraph"]]},
+    {"id":"lc08-definition","kind":"answerable","question":"中间件在 Agent 执行流程中起什么作用？","expected_sources":["尚硅谷-08-中间件.pdf"],"reference_pages":[1],"reference_answer":"中间件是在关键执行节点拦截、控制和增强行为的钩子，无需修改主流程。","answer_key_groups":[["钩子"],["拦截"],["控制"],["增强"],["无需","主流程"]]},
+    {"id":"lc08-components","kind":"answerable","question":"课件列出的 Agent 底层运行机制包含哪四个重要组件？","expected_sources":["尚硅谷-08-中间件.pdf"],"reference_pages":[1],"reference_answer":"包括模型、工具、系统提示词和中间件。","answer_key_groups":[["模型"],["工具"],["系统提示词"],["中间件"]]},
+    {"id":"lc09-memory","kind":"answerable","question":"短期记忆和长期记忆在作用范围上有什么区别？","expected_sources":["尚硅谷-09-上下文与记忆.pdf"],"reference_pages":[5],"reference_answer":"短期记忆限定在单个对话线程；长期记忆可跨会话保存并共享用户或应用数据。","answer_key_groups":[["短期","单个","线程"],["长期","跨会话"],["共享","用户","应用"]]},
+    {"id":"lc09-short-term","kind":"answerable","question":"LangChain 1.x 的短期记忆由哪三部分组合而成？","expected_sources":["尚硅谷-09-上下文与记忆.pdf"],"reference_pages":[6],"reference_answer":"由 State、Checkpointer 和 Thread ID 组成。","answer_key_groups":[["State"],["Checkpointer"],["Thread ID","thread_id"]]},
+    {"id":"lc10-rag","kind":"answerable","question":"什么是 RAG，它结合了哪两类技术？","expected_sources":["尚硅谷-10-RAG.pdf"],"reference_pages":[2],"reference_answer":"RAG 即检索增强生成，结合信息检索与文本生成，提高专业问答的准确性和可靠性。","answer_key_groups":[["检索增强生成"],["信息检索","Retrieval"],["文本生成","Generation"],["准确","可靠"]]},
+    {"id":"lc10-retriever","kind":"answerable","question":"课件如何定义 Retriever，它返回什么？","expected_sources":["尚硅谷-10-RAG.pdf"],"reference_pages":[7],"reference_answer":"Retriever 是响应非结构化查询的接口，返回符合查询要求的文档。","answer_key_groups":[["非结构化查询"],["接口"],["文档"]]},
+    {"id":"negative-git","kind":"unanswerable","question":"这个课程作者最喜欢使用哪种 Git 分支策略？","expected_sources":[],"reference_pages":[],"reference_answer":"课件没有提供该信息，应拒绝回答。","answer_key_groups":[["无法从当前知识库中确认"]]},
+    {"id":"negative-salary","kind":"unanswerable","question":"讲师 2026 年的月薪是多少？","expected_sources":[],"reference_pages":[],"reference_answer":"课件没有提供该信息，应拒绝回答。","answer_key_groups":[["无法从当前知识库中确认"]]},
+    {"id":"negative-weather","kind":"unanswerable","question":"2026 年 12 月 1 日杭州的实际天气如何？","expected_sources":[],"reference_pages":[],"reference_answer":"课件没有提供该信息，应拒绝回答。","answer_key_groups":[["无法从当前知识库中确认"]]}
+  ]
+}

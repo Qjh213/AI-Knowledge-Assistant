@@ -32,3 +32,5 @@ vectorstore/*
 
 # Docker runtime data
 docker/volumes/
+output/
+tmp/

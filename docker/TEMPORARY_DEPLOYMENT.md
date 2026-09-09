@@ -112,6 +112,14 @@ docker compose --env-file docker/.env -f docker/docker-compose.yml --profile app
 
 日志可能包含用户内容，分享前检查脱敏。更新测试通过后再重建前后端。数据库迁移失败时先排查，不要删除 volumes。
 
+从仅有稠密向量检索的旧版本升级到混合检索后，执行一次 BM25 回填：
+
+```bash
+docker exec aka-backend python -m app.backfill_lexical
+```
+
+只有输出的 dense/lexical 可见 chunk 数一致后才继续验收。完整说明见 `docker/RETRIEVAL_UPGRADE.md`。
+
 备份范围：PostgreSQL 逻辑备份、原始文档卷，以及需要保留的 Milvus/etcd/MinIO 数据。运行中的数据库目录不能当普通文件直接复制作为可靠备份；完整恢复步骤需在实际服务器上演练。只使用可重新导入的公开演示数据时，也可以保留原文件并重建向量，代价是再次调用嵌入 API。
 
 ## 8. 结束实验

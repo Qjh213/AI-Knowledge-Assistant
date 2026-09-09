@@ -15,6 +15,12 @@ class FakeMilvusClient:
         self.search_arguments = None
         self.raise_error = False
 
+    def has_collection(self, collection_name):
+        return True
+
+    def upsert(self, collection_name, data):
+        return {"upsert_count": len(data)}
+
     def insert(self, collection_name, data):
         if self.raise_error:
             raise RuntimeError("Milvus unavailable")
@@ -79,6 +85,7 @@ def create_service():
 
     # 单元测试只检查业务逻辑，不连接真实 Milvus。
     service.ensure_collection = lambda: None
+    service.ensure_lexical_collection = lambda: None
 
     return service, client
 
