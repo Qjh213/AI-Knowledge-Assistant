@@ -1,4 +1,6 @@
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from docx import Document as DocxDocument
@@ -9,7 +11,12 @@ from app.core.exceptions import (
     DocumentParseError,
     NoExtractableTextError,
 )
-from app.services.document_parser import DocumentParserService
+from app.services.document_parser import (
+    DocumentParserService,
+    ParsedDocument,
+    ParsedSection,
+)
+from app.services.document_processing import DocumentProcessingService
 
 
 def test_parse_utf8_text(tmp_path: Path) -> None:
@@ -68,6 +75,64 @@ def test_parse_pdf(tmp_path: Path) -> None:
     assert "PDF parser test content" in parsed.sections[0].text
     assert parsed.sections[0].page_number == 1
     assert parsed.sections[0].metadata["page"] == 1
+
+
+def test_reject_pdf_with_garbled_text(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "garbled.pdf"
+    path.write_bytes(b"placeholder")
+
+    class GarbledPage:
+        @staticmethod
+        def extract_text() -> str:
+            return 'k"\x8f\xceR\xa0Qe\x97^v\xc8R) Python \x16\x0b corrupted text'
+
+    class GarbledReader:
+        is_encrypted = False
+        pages = [GarbledPage()]
+
+    monkeypatch.setattr(
+        "app.services.document_parser.PdfReader",
+        lambda _: GarbledReader(),
+    )
+
+    parser = DocumentParserService(storage_path=tmp_path)
+
+    with pytest.raises(
+        DocumentParseError,
+        match="解析结果检测到乱码，该文件无法安全入库，请使用 MinerU 解析或更换文件",
+    ):
+        parser.parse(path.name)
+
+
+def test_pdf_garbled_detection_accepts_normal_multilingual_text() -> None:
+    text = "正常的中文 PDF 文本，包含 Python、café、数学公式 α + β，以及常用标点。"
+
+    assert DocumentParserService._looks_garbled(text) is False
+
+
+def test_index_rejects_garbled_output_before_chunking_or_storage() -> None:
+    service = object.__new__(DocumentProcessingService)
+    service.chunker = Mock()
+    parsed = ParsedDocument(
+        sections=(ParsedSection(
+            text='k"\x8f\xceR\xa0Qe\x97^v\xc8R) Python \x16\x0b corrupted text',
+            page_number=1,
+            metadata={},
+        ),),
+        character_count=41,
+    )
+    document = SimpleNamespace(
+        id="document-id",
+        original_filename="garbled.pdf",
+    )
+
+    with pytest.raises(DocumentParseError, match="无法安全入库"):
+        service.index_parsed_document(Mock(), document, parsed)
+
+    service.chunker.split.assert_not_called()
 
 
 def test_parse_docx_paragraphs_and_tables(

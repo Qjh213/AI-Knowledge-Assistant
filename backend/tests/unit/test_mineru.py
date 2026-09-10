@@ -130,6 +130,28 @@ def test_wrap_api_error() -> None:
         make_client(handler).request_upload_url("lesson.pdf")
 
 
+def test_waiting_file_state_is_treated_as_pending() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "code": 0,
+                "data": {
+                    "extract_result": [
+                        {"file_name": "part.pdf", "state": "waiting-file"}
+                    ]
+                },
+            },
+        )
+
+    result = make_client(handler).get_batch_result(
+        "batch-1", file_name="part.pdf"
+    )
+
+    assert result.state == "pending"
+    assert result.progress == 0
+
+
 def test_reject_missing_token() -> None:
     with pytest.raises(MinerUServiceError, match="MINERU_API_TOKEN"):
         MinerUClient(

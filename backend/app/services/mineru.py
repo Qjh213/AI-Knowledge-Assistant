@@ -163,10 +163,14 @@ class MinerUClient:
             raise MinerUServiceError("task response did not contain results")
 
         result = self._select_result(results, file_name)
-        state = result.get("state")
+        raw_state = result.get("state")
+        state_aliases = {
+            "waiting-file": "pending",
+        }
+        state = state_aliases.get(raw_state, raw_state)
         valid_states = {"pending", "running", "converting", "done", "failed"}
         if state not in valid_states:
-            raise MinerUServiceError(f"unknown MinerU task state: {state!r}")
+            raise MinerUServiceError(f"unknown MinerU task state: {raw_state!r}")
 
         progress = self._progress(result, state)
         returned_name = result.get("file_name") or file_name or ""

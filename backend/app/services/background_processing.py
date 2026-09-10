@@ -185,6 +185,9 @@ class BackgroundDocumentProcessor:
     ) -> None:
         service = MinerUDocumentProcessingService()
         document = service.document_service.get(session, knowledge_base_id, document_id)
+        if service.requires_split(document.file_path):
+            service.process_long_pdf(session, knowledge_base_id, document_id)
+            return
         if document.external_task_id:
             result = service.mineru_client.get_batch_result(
                 document.external_task_id, file_name=document.original_filename

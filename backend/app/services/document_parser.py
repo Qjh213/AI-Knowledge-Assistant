@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,10 @@ class ParsedDocument:
 
 
 class DocumentParserService:
+    GARBLED_TEXT_MESSAGE = (
+        "解析结果检测到乱码，该文件无法安全入库，请使用 MinerU 解析或更换文件"
+    )
+
     def __init__(
         self,
         storage_path: Path | None = None,
@@ -144,7 +149,13 @@ class DocumentParserService:
             reader.pages,
             start=1,
         ):
-            text = self._clean_text(page.extract_text() or "")
+            extracted_text = page.extract_text() or ""
+            if self._looks_garbled(extracted_text):
+                raise DocumentParseError(
+                    path.name,
+                    self.GARBLED_TEXT_MESSAGE,
+                )
+            text = self._clean_text(extracted_text)
 
             if text:
                 sections.append(
@@ -162,6 +173,39 @@ class DocumentParserService:
             raise NoExtractableTextError(path.name)
 
         return sections
+
+    @classmethod
+    def ensure_text_quality(
+        cls,
+        parsed_document: ParsedDocument,
+        filename: str,
+    ) -> None:
+        """Reject garbled output before any chunks or vectors are written."""
+        if any(
+            cls._looks_garbled(section.text)
+            for section in parsed_document.sections
+        ):
+            raise DocumentParseError(filename, cls.GARBLED_TEXT_MESSAGE)
+
+    @staticmethod
+    def _looks_garbled(text: str) -> bool:
+        """Detect broken PDF font mappings without rejecting normal Unicode text."""
+        meaningful = [character for character in text if not character.isspace()]
+        if len(meaningful) < 20:
+            return False
+
+        suspicious = 0
+        for character in meaningful:
+            codepoint = ord(character)
+            category = unicodedata.category(character)
+            if (
+                character == "\ufffd"
+                or category in {"Cc", "Cs", "Co", "Cn"}
+                or 0x80 <= codepoint <= 0x9F
+            ):
+                suspicious += 1
+
+        return suspicious >= 3 and suspicious / len(meaningful) >= 0.02
 
     def _parse_docx(
         self,

@@ -358,7 +358,8 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
           <p className="mt-0.5 text-sky-700">
             可一次选择多个 TXT、Markdown、PDF 或 DOCX 文件，每个文件最大 100 MB；
             上传最多同时进行 3 个。本地处理最多同时进行 2 个；MinerU 仅处理 PDF
-            和 DOCX，最多同时提交 3 个。其余文件会自动排队，不限制本次选择总数。
+            和 DOCX，官方限制单文件不超过 200 页，最多同时提交 3 个。超过 200 页请拆分后上传；
+            其余文件会自动排队，不限制本次选择总数。
           </p>
         </div>
       </div>
@@ -511,11 +512,41 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
                       )}
                     </>
                   )}
-                  {(document.status === 'failed' || document.status === 'processing') && (
+                  {document.status === 'failed' && (
+                    <>
+                      <button
+                        disabled={operationsPending}
+                        onClick={() => processMutation.mutate(document.id)}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                      >
+                        {isLocalProcessingThis ? (
+                          <LoaderCircle size={15} className="animate-spin" />
+                        ) : (
+                          <RefreshCw size={15} />
+                        )}
+                        本地重试
+                      </button>
+                      {canUseMinerU && (
+                        <button
+                          disabled={operationsPending}
+                          onClick={() => mineruMutation.mutate(document.id)}
+                          className="inline-flex h-9 items-center gap-2 rounded-xl bg-sky-50 px-3 text-xs font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+                        >
+                          {isMineruProcessingThis ? (
+                            <LoaderCircle size={15} className="animate-spin" />
+                          ) : (
+                            <Sparkles size={15} />
+                          )}
+                          MinerU 重试
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {document.status === 'processing' && (
                     <button
                       disabled={operationsPending}
                       onClick={() => {
-                        if (document.status === 'failed' || window.confirm('仅恢复已中断的任务；仍在运行的任务会被服务器拒绝，不会重复启动。是否继续？')) {
+                        if (window.confirm('仅恢复已中断的任务；仍在运行的任务会被服务器拒绝，不会重复启动。是否继续？')) {
                           retryMutation.mutate(document.id)
                         }
                       }}
@@ -527,7 +558,7 @@ export function DocumentPanel({ knowledgeBaseId }: DocumentPanelProps) {
                       ) : (
                         <RefreshCw size={15} />
                       )}
-                      {document.status === 'processing' ? '恢复处理' : '重试'}
+                      恢复处理
                     </button>
                   )}
                   <button

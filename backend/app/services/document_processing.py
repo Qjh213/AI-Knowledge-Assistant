@@ -49,6 +49,12 @@ class DocumentProcessingService:
         parsed_document: ParsedDocument,
     ) -> Document:
         """Chunk, embed, and index an already parsed document."""
+        # Final gate shared by local and MinerU parsing. Nothing below this
+        # point may run when the parsed text is garbled.
+        DocumentParserService.ensure_text_quality(
+            parsed_document,
+            document.original_filename,
+        )
         text_chunks = self.chunker.split(
             parsed_document
         )

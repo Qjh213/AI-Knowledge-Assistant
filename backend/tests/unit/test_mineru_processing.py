@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from pypdf import PdfReader, PdfWriter
 
 from app.core.exceptions import (
     DocumentProcessingError,
@@ -131,6 +132,39 @@ class FakeMinerUFinalizationClient(
         return self.markdown
 
 
+class FakeLongPdfMinerUClient:
+    def __init__(self) -> None:
+        self.requested_names: list[str] = []
+        self.uploaded_page_counts: list[int] = []
+        self.downloaded_urls: list[str] = []
+
+    def request_upload_url(self, file_name: str) -> MinerUUploadTask:
+        self.requested_names.append(file_name)
+        part_number = len(self.requested_names)
+        return MinerUUploadTask(
+            batch_id=f"batch-{part_number}",
+            upload_url=f"https://upload.example/{part_number}",
+        )
+
+    def upload_file(self, upload_url: str, file_path: Path) -> None:
+        self.uploaded_page_counts.append(len(PdfReader(str(file_path)).pages))
+
+    def get_batch_result(
+        self, batch_id: str, *, file_name: str | None = None
+    ) -> MinerUTaskResult:
+        return MinerUTaskResult(
+            batch_id=batch_id,
+            file_name=file_name or "part.pdf",
+            state="done",
+            progress=100,
+            full_zip_url=f"https://download.example/{batch_id}.zip",
+        )
+
+    def download_markdown(self, full_zip_url: str) -> str:
+        self.downloaded_urls.append(full_zip_url)
+        return f"# Parsed result {len(self.downloaded_urls)}\n\nUseful Python text."
+
+
 class FakeVectorStore:
     def __init__(self) -> None:
         self.deleted_document_ids: list[object] = []
@@ -241,6 +275,59 @@ def patch_repository_updates(
         "mark_processing_finished",
         mark_processing_finished,
     )
+
+
+def write_blank_pdf(path: Path, page_count: int) -> None:
+    writer = PdfWriter()
+    for _ in range(page_count):
+        writer.add_blank_page(width=612, height=792)
+    with path.open("wb") as output:
+        writer.write(output)
+
+
+@pytest.mark.parametrize("page_count, expected", [(200, False), (201, True)])
+def test_requires_split_uses_official_page_limit(
+    tmp_path: Path, page_count: int, expected: bool
+) -> None:
+    source = tmp_path / "book.pdf"
+    write_blank_pdf(source, page_count)
+    service = MinerUDocumentProcessingService(
+        storage_service=DocumentStorageService(storage_path=tmp_path)
+    )
+
+    assert service.requires_split(source.name) is expected
+
+
+def test_process_long_pdf_splits_merges_and_indexes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    document = make_document()
+    source = tmp_path / document.file_path
+    write_blank_pdf(source, 361)
+    session = FakeSession()
+    mineru_client = FakeLongPdfMinerUClient()
+    processing_service = FakeProcessingService()
+    patch_repository_updates(monkeypatch)
+
+    service = MinerUDocumentProcessingService(
+        mineru_client=mineru_client,
+        document_service=FakeDocumentService(document),
+        storage_service=DocumentStorageService(storage_path=tmp_path),
+        processing_service=processing_service,
+    )
+    result = service.process_long_pdf(
+        session, document.knowledge_base_id, document.id
+    )
+
+    assert result is document
+    assert mineru_client.uploaded_page_counts == [180, 180, 1]
+    assert len(processing_service.calls) == 1
+    parsed = processing_service.calls[0][1]
+    assert parsed.sections[0].metadata["page_count"] == 361
+    assert parsed.sections[0].metadata["part_count"] == 3
+    assert "original_pages:1-180" in parsed.sections[0].text
+    assert "original_pages:361-361" in parsed.sections[0].text
+    assert document.status == DocumentStatus.COMPLETED
 
 
 def test_submit_document_to_mineru(

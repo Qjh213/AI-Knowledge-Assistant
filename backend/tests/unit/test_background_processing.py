@@ -45,6 +45,7 @@ def make_document(status: DocumentStatus) -> SimpleNamespace:
     return SimpleNamespace(
         id=uuid4(),
         knowledge_base_id=uuid4(),
+        file_path="stored-document.pdf",
         status=status,
         parser=DocumentParser.LOCAL,
         external_task_id=None,
@@ -241,6 +242,7 @@ def test_remote_task_reuse_only_resubmits_failed_remote_task(monkeypatch, remote
     document.external_task_id = "existing-task"
     service = MagicMock()
     service.document_service.get.return_value = document
+    service.requires_split.return_value = False
     service.mineru_client.get_batch_result.return_value = SimpleNamespace(state=remote_state)
     submitted_task_ids = []
     def submit(*args):
@@ -255,6 +257,26 @@ def test_remote_task_reuse_only_resubmits_failed_remote_task(monkeypatch, remote
     monkeypatch.setattr("app.services.background_processing.sleep", lambda seconds: None)
     BackgroundDocumentProcessor._run_mineru(FakeSession(), document.knowledge_base_id, document.id)
     assert submitted_task_ids == [None if remote_state == "failed" else "existing-task"]
+
+
+def test_oversized_pdf_uses_split_processing(monkeypatch):
+    document = make_document(DocumentStatus.PROCESSING)
+    document.original_filename = "long-book.pdf"
+    document.file_path = "long-book.pdf"
+    service = MagicMock()
+    service.document_service.get.return_value = document
+    service.requires_split.return_value = True
+    monkeypatch.setattr(
+        "app.services.background_processing.MinerUDocumentProcessingService",
+        lambda: service,
+    )
+
+    BackgroundDocumentProcessor._run_mineru(
+        FakeSession(), document.knowledge_base_id, document.id
+    )
+
+    service.process_long_pdf.assert_called_once()
+    service.submit.assert_not_called()
 
 
 def test_failure_persistence_error_is_logged_without_secrets(monkeypatch, caplog):

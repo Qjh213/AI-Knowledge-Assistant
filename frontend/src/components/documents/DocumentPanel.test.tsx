@@ -139,6 +139,8 @@ describe('DocumentPanel', () => {
     expect(screen.getByText(/上传最多同时进行 3 个/)).toBeInTheDocument()
     expect(screen.getByText(/本地处理最多同时进行 2 个/)).toBeInTheDocument()
     expect(screen.getByText(/MinerU 仅处理 PDF/)).toBeInTheDocument()
+    expect(screen.getByText(/官方限制单文件不超过 200 页/)).toBeInTheDocument()
+    expect(screen.getByText(/超过 200 页请拆分后上传/)).toBeInTheDocument()
     expect(screen.getByText(/不限制本次选择总数/)).toBeInTheDocument()
   })
 
@@ -403,10 +405,12 @@ describe('DocumentPanel', () => {
     expect(screen.getByText('3 个分块')).toBeInTheDocument()
   })
 
-  it('retries a failed document', async () => {
+  it('allows a failed MinerU document to retry with the local parser', async () => {
     const user = userEvent.setup()
     const failed = {
       ...createDocument('failed'),
+      original_filename: 'python-book.pdf',
+      parser: 'mineru' as const,
       error_message: 'temporary failure',
       processing_attempts: 1,
     }
@@ -416,22 +420,37 @@ describe('DocumentPanel', () => {
       offset: 0,
       limit: 100,
     })
-    mockedRetryDocumentProcessing.mockResolvedValue({
+    mockedProcessDocument.mockResolvedValue({
       ...failed,
       status: 'processing',
       processing_attempts: 2,
+      parser: 'local',
     })
 
     renderPanel()
-    await user.click(await screen.findByRole('button', { name: '重试' }))
+    expect(await screen.findByRole('button', { name: 'MinerU 重试' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '本地重试' }))
 
-    expect(mockedRetryDocumentProcessing).toHaveBeenCalledWith(
+    expect(mockedProcessDocument).toHaveBeenCalledWith(
       'knowledge-base-1',
       'document-1',
     )
     expect(
-      await screen.findByText('任务已重新加入后台队列。'),
+      await screen.findByText('文档已加入后台处理队列。'),
     ).toBeInTheDocument()
+  })
+
+  it('allows a failed PDF to retry with MinerU explicitly', async () => {
+    const user = userEvent.setup()
+    const failed = { ...createDocument('failed'), original_filename: 'guide.pdf' }
+    mockedGetDocuments.mockResolvedValue({ items: [failed], total: 1, offset: 0, limit: 100 })
+    mockedProcessDocumentWithMinerU.mockResolvedValue({ ...failed, status: 'processing', parser: 'mineru' })
+
+    renderPanel()
+    await user.click(await screen.findByRole('button', { name: 'MinerU 重试' }))
+
+    expect(mockedProcessDocumentWithMinerU).toHaveBeenCalledWith('knowledge-base-1', 'document-1')
+    expect(await screen.findByText('文档已提交 MinerU，正在解析。')).toBeInTheDocument()
   })
 
   it('confirms before requesting recovery of a stuck document', async () => {

@@ -1,8 +1,9 @@
+import hashlib
 import json
 from evaluation.metrics import aggregate, citation_marker_valid, keyword_group_score, score_case
 import httpx
 
-from evaluation.run import request_json, validate_dataset
+from evaluation.run import request_json, validate_dataset, verify_source_files
 
 
 def test_answerable_case_scores_source_rank_keywords_and_citations():
@@ -81,3 +82,26 @@ def test_bundled_dataset_is_valid_and_balanced():
     assert len(dataset["source_documents"]) == 10
     assert sum(case["kind"] == "answerable" for case in dataset["cases"]) == 20
     assert sum(case["kind"] == "unanswerable" for case in dataset["cases"]) == 3
+
+
+def test_dataset_validation_supports_a_different_corpus_size(tmp_path):
+    source = tmp_path / "docs" / "guide.md"
+    source.parent.mkdir()
+    source.write_text("跨领域评测", encoding="utf-8")
+    dataset = {
+        "version": 1,
+        "name": "other-kb",
+        "source_documents": [{
+            "filename": "guide.md",
+            "source_path": "docs/guide.md",
+            "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        }],
+        "cases": [{
+            "id": "answerable", "kind": "answerable",
+            "question": "评测什么？", "expected_sources": ["guide.md"],
+            "answer_key_groups": [["跨领域"]],
+        }],
+    }
+
+    validate_dataset(dataset)
+    verify_source_files(dataset, tmp_path)

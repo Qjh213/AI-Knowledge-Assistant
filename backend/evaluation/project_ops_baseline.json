@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "project-operations-cross-domain-v1",
+  "description": "Cross-domain baseline grounded in project operations documentation.",
+  "source_documents": [
+    {"filename":"README.md","source_path":"README.md","sha256":"43cb0f7e61484676ca0e517539238c0ff00cca04b61dfdb683f1ba5a3b75c033"},
+    {"filename":"RETRIEVAL_UPGRADE.md","source_path":"docker/RETRIEVAL_UPGRADE.md","sha256":"4c06ee508dd6d591c5cef0c74904c8e70486cc37381fd292f2987bb9a02cea4f"},
+    {"filename":"AUTH_SETUP.md","source_path":"docker/AUTH_SETUP.md","sha256":"30c8073409c4f8255a228b452f16ad621aebc90e0cb3fe98a120316ac96b61ac"},
+    {"filename":"TEMPORARY_DEPLOYMENT.md","source_path":"docker/TEMPORARY_DEPLOYMENT.md","sha256":"d84430d9c875b77d6ec76b8e8e9357f231dc4493b3aa9ce06e3956c2f767d742"}
+  ],
+  "cases": [
+    {"id":"ops-stack-retrieval","kind":"answerable","question":"项目的混合检索链路由哪些主要步骤组成？","expected_sources":["README.md","RETRIEVAL_UPGRADE.md"],"reference_answer":"Milvus 稠密向量与原生 BM25 双路召回，再用 RRF 融合、语义重排，最后进行上下文去重。","answer_key_groups":[["Milvus"],["稠密向量"],["BM25"],["RRF"],["重排"]]},
+    {"id":"ops-reranker-fallback","kind":"answerable","question":"语义重排调用失败时系统如何降级，怎样紧急关闭重排？","expected_sources":["RETRIEVAL_UPGRADE.md"],"reference_answer":"自动回退到 RRF 顺序；设置 RERANKER_ENABLED=false 并重建后端，双路召回仍保留。","answer_key_groups":[["RRF"],["RERANKER_ENABLED=false"],["重建"],["BM25","双路召回"]]},
+    {"id":"ops-backfill-acceptance","kind":"answerable","question":"旧数据完成 BM25 回填后，以什么现象作为验收条件？","expected_sources":["README.md","RETRIEVAL_UPGRADE.md"],"reference_answer":"可见的 dense 与 lexical chunk 数量一致。","answer_key_groups":[["dense"],["lexical"],["数量一致"]]},
+    {"id":"ops-auth-session","kind":"answerable","question":"服务端会话有效期多久，Cookie 和写请求分别采用哪些防护？","expected_sources":["AUTH_SETUP.md"],"reference_answer":"8 小时；Cookie 使用 HttpOnly 和 SameSite=Strict；写请求携带 X-Requested-With、CSRF 令牌并校验 Origin。","answer_key_groups":[["8 小时","8小时"],["HttpOnly"],["SameSite=Strict"],["CSRF"],["Origin"]]},
+    {"id":"ops-password-storage","kind":"answerable","question":"用户密码采用什么算法和迭代次数保存，能否恢复原密码？","expected_sources":["AUTH_SETUP.md"],"reference_answer":"带随机盐的 PBKDF2-HMAC-SHA256，600,000 次，不能恢复原密码。","answer_key_groups":[["PBKDF2-HMAC-SHA256"],["600,000","600000"],["随机盐"],["不可恢复","不能恢复"]]},
+    {"id":"ops-quota-reset","kind":"answerable","question":"每日 AI 额度何时重置，哪些操作会计数？","expected_sources":["AUTH_SETUP.md"],"reference_answer":"UTC 零点重置；检索、问答、入队解析和恢复计数，供应商失败也计数。","answer_key_groups":[["UTC 零点"],["检索"],["问答"],["解析","恢复"],["供应商失败"]]},
+    {"id":"ops-tunnel-ports","kind":"answerable","question":"临时云端演示方案中，安全组应开放什么端口，又明确不能开放哪些服务端口？","expected_sources":["TEMPORARY_DEPLOYMENT.md"],"reference_answer":"只允许自己的当前公网 IP 访问 SSH（通常 22），不开放 8080、8000、5432、19530、9091、9000、9001。","answer_key_groups":[["SSH","22"],["当前公网 IP"],["8080"],["5432"],["19530"]]},
+    {"id":"ops-stop-billing","kind":"answerable","question":"结束云端实验时，为什么不能认为关机或 docker compose down 就停止了全部计费？","expected_sources":["TEMPORARY_DEPLOYMENT.md"],"reference_answer":"关联磁盘、公网 IP、快照、备份等资源可能继续保留并计费，需要逐项检查和释放。","answer_key_groups":[["磁盘"],["公网 IP"],["快照","备份"],["释放","计费"]]},
+    {"id":"ops-upload-limit","kind":"answerable","question":"上传大文件返回 413 时，需要同时修改哪两处配置？","expected_sources":["README.md"],"reference_answer":"docker/.env 的 MAX_UPLOAD_SIZE_MB 与 frontend/nginx.conf 的 client_max_body_size。","answer_key_groups":[["MAX_UPLOAD_SIZE_MB"],["client_max_body_size"],["docker/.env"],["frontend/nginx.conf"]]},
+    {"id":"negative-kubernetes","kind":"unanswerable","question":"项目生产环境使用了几个 Kubernetes Pod？","expected_sources":[],"reference_answer":"文档没有提供该信息，应拒绝回答。","answer_key_groups":[["无法从当前知识库中确认"]]},
+    {"id":"negative-sla","kind":"unanswerable","question":"该项目承诺的线上 SLA 百分比是多少？","expected_sources":[],"reference_answer":"文档没有提供该信息，应拒绝回答。","answer_key_groups":[["无法从当前知识库中确认"]]},
+    {"id":"negative-budget","kind":"unanswerable","question":"云端演示每月实际花费了多少钱？","expected_sources":[],"reference_answer":"文档没有给出实际金额，应拒绝回答。","answer_key_groups":[["无法从当前知识库中确认"]]}
+  ]
+}

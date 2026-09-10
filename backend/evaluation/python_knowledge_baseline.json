@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "name": "python-knowledge-books-v1",
+  "description": "Retrieval baseline for the three documents in the Python knowledge base.",
+  "source_documents": [
+    {"filename":"Python数据处理.pdf","sha256":"6ee50daa4f9948434adf0ed48fc5655d88d33cc835ed9952e588dd88de0a2ffe"},
+    {"filename":"Python科学计算(#).pdf","sha256":"4935ee3c64f123d6430c9a8121a2ebc71bef6ec4a122ec5ccc2076852ac55485"},
+    {"filename":"Python网络数据采集.pdf","sha256":"054719b8353acbbdc81b997892ec26d4e355dbe35f8ffe904e00f3194b0f8a7b"}
+  ],
+  "cases": [
+    {"id":"data-regex-search-match","kind":"answerable","question":"Python 正则表达式中 search 和 match 方法有什么区别？","expected_sources":["Python数据处理.pdf"],"reference_answer":"search 会在整个字符串中查找匹配，match 只从字符串开头开始匹配。","answer_key_groups":[["search"],["整个字符串"],["match"],["开头"]]},
+    {"id":"data-requests-status","kind":"answerable","question":"使用 requests 发送 GET 请求后，如何检查请求是否成功以及查看响应头？","expected_sources":["Python数据处理.pdf"],"reference_answer":"调用 requests.get，检查响应的 status_code 是否为 200，并通过 headers 属性查看响应头。","answer_key_groups":[["requests.get","get"],["status_code"],["200"],["headers"]]},
+    {"id":"data-visualization-libraries","kind":"answerable","question":"书中用于简单图表和复杂交互图表的 Python 库分别是什么？","expected_sources":["Python数据处理.pdf"],"reference_answer":"matplotlib 用于生成简单图表，Bokeh 用于生成更复杂且带交互元素的图表。","answer_key_groups":[["matplotlib"],["Bokeh"],["交互"]]},
+    {"id":"science-broadcast-rules","kind":"answerable","question":"NumPy 对形状不同的数组进行广播时遵循哪些基本规则？","expected_sources":["Python科学计算(#).pdf"],"reference_answer":"先在维度较少数组的 shape 前补 1；输出各轴取输入数组对应轴最大值；输入轴长度必须为 1 或等于输出轴长度。","answer_key_groups":[["补","加 1"],["最大值"],["长度为 1"],["相同","等于"]]},
+    {"id":"science-frompyfunc","kind":"answerable","question":"NumPy 的 frompyfunc 函数有什么用途，它的 nin 和 nout 参数表示什么？","expected_sources":["Python科学计算(#).pdf"],"reference_answer":"frompyfunc 把针对单个值的函数转换为逐元素计算的 ufunc；nin 是输入参数个数，nout 是返回值个数。","answer_key_groups":[["ufunc"],["单个值","逐元素"],["输入参数"],["返回值"]]},
+    {"id":"science-core-libraries","kind":"answerable","question":"NumPy、SciPy 和 matplotlib 分别为 Python 科学计算提供什么能力？","expected_sources":["Python科学计算(#).pdf"],"reference_answer":"NumPy 提供快速数组处理，SciPy 提供数值运算，matplotlib 提供绘图功能。","answer_key_groups":[["NumPy","数组"],["SciPy","数值运算"],["matplotlib","绘图"]]},
+    {"id":"web-beautifulsoup-role","kind":"answerable","question":"BeautifulSoup 如何帮助解析复杂的 HTML 或 XML 页面？","expected_sources":["Python网络数据采集.pdf"],"reference_answer":"它通过定位 HTML 标签组织复杂网络信息，并把 XML 结构表示为易用的 Python 对象。","answer_key_groups":[["HTML 标签"],["XML"],["Python 对象"]]},
+    {"id":"web-urlopen-import","kind":"answerable","question":"在 Python 3 中如何从 urllib 导入并使用 urlopen 获取网页内容？","expected_sources":["Python网络数据采集.pdf"],"reference_answer":"从 urllib.request 导入 urlopen，打开 URL 后调用 read 获取 HTML 内容。","answer_key_groups":[["urllib.request"],["urlopen"],["read"],["HTML"]]},
+    {"id":"web-robots-legal","kind":"answerable","question":"网络数据采集前应查看哪些站点规则来判断抓取是否合法？","expected_sources":["Python网络数据采集.pdf"],"reference_answer":"应检查 robots.txt、服务条款以及页面发布的版权或其他法律声明。","answer_key_groups":[["robots.txt"],["服务条款"],["版权","法律声明"]]}
+  ]
+}

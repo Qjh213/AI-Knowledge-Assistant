@@ -76,27 +76,33 @@ def request_json(
 
 def validate_dataset(dataset: dict) -> None:
     assert dataset.get("version") == 1
+    assert dataset.get("name")
     ids = [case["id"] for case in dataset["cases"]]
     assert len(ids) == len(set(ids)) and ids
-    sources = {item["filename"] for item in dataset["source_documents"]}
-    assert len(sources) == 10
+    source_items = dataset["source_documents"]
+    sources = {item["filename"] for item in source_items}
+    assert sources and len(sources) == len(source_items)
     for item in dataset["source_documents"]:
         assert len(item["sha256"]) == 64
     for case in dataset["cases"]:
         assert case["kind"] in {"answerable", "unanswerable"}
         assert set(case["expected_sources"]) <= sources
         assert case["answer_key_groups"]
+        if case["kind"] == "answerable":
+            assert case["expected_sources"]
+        else:
+            assert not case["expected_sources"]
 
 
 def verify_source_files(dataset: dict, source_dir: Path) -> None:
     for source in dataset["source_documents"]:
-        path = source_dir / source["filename"]
+        path = source_dir / source.get("source_path", source["filename"])
         if not path.is_file():
-            raise SystemExit(f"Source PDF missing: {path}")
+            raise SystemExit(f"Source document missing: {path}")
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         if digest != source["sha256"]:
-            raise SystemExit(f"Source PDF checksum mismatch: {path}")
-    print(f"Source PDF checksums verified: {len(dataset['source_documents'])}")
+            raise SystemExit(f"Source document checksum mismatch: {path}")
+    print(f"Source document checksums verified: {len(dataset['source_documents'])}")
 
 
 def write_checkpoint(

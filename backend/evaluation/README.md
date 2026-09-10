@@ -39,3 +39,14 @@
 运行器只对 `429/502/503/504` 做有限退避重试，并逐题写入本地检查点；同参数重跑会跳过已完成题目。检查点和正式报告都位于 `output/evaluation/`，不应提交仓库。
 
 首次结果只建立基线，不设“合格线”。人工复核失败样例后固定参数与数据版本，再在后续检索、切分、嵌入或提示词变更中比较同一批指标。调整 `--limit` 或 `--min-score` 时必须在报告中保留参数，不能直接和不同参数的结果混为一谈。
+
+## 第二知识库：项目运维文档
+
+`project_ops_baseline.json` 是不同于 LangChain 课程的第二套领域评测，共 4 份项目运维文档、9 道可回答题和 3 道库外拒答题。新建专用知识库并上传项目根目录中的 `README.md`、`docker/RETRIEVAL_UPGRADE.md`、`docker/AUTH_SETUP.md`、`docker/TEMPORARY_DEPLOYMENT.md`，等待处理完成后运行：
+
+```powershell
+Set-Location backend
+.\.venv\Scripts\python.exe -m evaluation.run --knowledge-base-id <知识库UUID> --username admin --mode retrieval --dataset evaluation/project_ops_baseline.json --source-dir ..
+```
+
+确认检索结果后，将 `--mode retrieval` 改为 `--mode end-to-end`。两次运行要保持相同的 `--limit` 与 `--min-score`。这套结果用于验证跨领域泛化，不应与原课程题混算成一个“准确率”。
