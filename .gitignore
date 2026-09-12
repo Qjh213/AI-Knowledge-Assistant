@@ -34,3 +34,7 @@ vectorstore/*
 docker/volumes/
 output/
 tmp/
+
+# Personal interview and resume materials (keep local, never publish)
+docs/*
+!docs/.gitkeep
